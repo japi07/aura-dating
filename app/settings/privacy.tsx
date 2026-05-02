@@ -1,0 +1,174 @@
+import React, { useState } from 'react';
+import {
+  StyleSheet, View, Text, ScrollView, TouchableOpacity,
+  Switch, StatusBar,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { COLORS } from '@/constants/colors';
+
+const VISIBILITY_OPTIONS = [
+  { key: 'all', label: 'All verified men', desc: 'Maximum visibility — recommended', icon: 'eye' },
+  { key: 'verifiedOnly', label: 'Only highly verified men', desc: 'Both biometric + ID verified', icon: 'shield-checkmark' },
+  { key: 'paused', label: 'Pause my profile', desc: 'You\'ll receive zero proposals', icon: 'pause' },
+];
+
+export default function PrivacyScreen() {
+  const router = useRouter();
+  const [visibility, setVisibility] = useState('all');
+  const [showLastSeen, setShowLastSeen] = useState(false);
+  const [readReceipts, setReadReceipts] = useState(true);
+  const [hideAge, setHideAge] = useState(false);
+  const [hideJob, setHideJob] = useState(false);
+  const [incognito, setIncognito] = useState(false);
+  const [shareAnalytics, setShareAnalytics] = useState(true);
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar barStyle="dark-content" />
+
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="chevron-back" size={26} color={COLORS.TEXT} />
+        </TouchableOpacity>
+        <Text style={styles.title}>Privacy</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
+        {/* Profile visibility */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Who can send me proposals</Text>
+          <View style={styles.card}>
+            {VISIBILITY_OPTIONS.map((opt, i) => (
+              <TouchableOpacity
+                key={opt.key}
+                style={[styles.optionRow, i < VISIBILITY_OPTIONS.length - 1 && styles.rowBorder]}
+                onPress={() => setVisibility(opt.key)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.optionIcon, visibility === opt.key && { backgroundColor: COLORS.BRAND }]}>
+                  <Ionicons name={opt.icon as any} size={18} color={visibility === opt.key ? '#fff' : COLORS.BRAND} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.optionLabel}>{opt.label}</Text>
+                  <Text style={styles.optionDesc}>{opt.desc}</Text>
+                </View>
+                <View style={[styles.radio, visibility === opt.key && styles.radioOn]}>
+                  {visibility === opt.key && <View style={styles.radioDot} />}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Profile details */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Profile details</Text>
+          <View style={styles.card}>
+            <ToggleRow icon="briefcase" label="Hide my job title" desc="Won't show on your profile" value={hideJob} onChange={setHideJob} border />
+            <ToggleRow icon="calendar" label="Hide my exact age" desc="Show '20s' or '30s' instead" value={hideAge} onChange={setHideAge} />
+          </View>
+        </View>
+
+        {/* Activity */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Activity</Text>
+          <View style={styles.card}>
+            <ToggleRow icon="time" label="Show last active" desc="Let others see when you're online" value={showLastSeen} onChange={setShowLastSeen} border />
+            <ToggleRow icon="checkmark-done" label="Read receipts on proposals" desc="Senders see when you've viewed their proposal" value={readReceipts} onChange={setReadReceipts} border />
+            <ToggleRow icon="eye-off" label="Incognito mode" desc="Browse profiles without being seen" value={incognito} onChange={setIncognito} premium />
+          </View>
+        </View>
+
+        {/* Data */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Data</Text>
+          <View style={styles.card}>
+            <ToggleRow icon="analytics" label="Help improve Aura" desc="Anonymous usage analytics" value={shareAnalytics} onChange={setShareAnalytics} border />
+            <ActionRow icon="download" label="Download my data" onPress={() => {}} />
+            <ActionRow icon="trash" label="Delete my account" onPress={() => {}} danger />
+          </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function ToggleRow({ icon, label, desc, value, onChange, border, premium }: any) {
+  return (
+    <View style={[styles.row, border && styles.rowBorder]}>
+      <View style={styles.rowIcon}>
+        <Ionicons name={icon as any} size={18} color={COLORS.BRAND} />
+      </View>
+      <View style={styles.rowBody}>
+        <View style={styles.rowLabelRow}>
+          <Text style={styles.rowLabel}>{label}</Text>
+          {premium && (
+            <View style={styles.premiumBadge}>
+              <Ionicons name="diamond" size={9} color={COLORS.GOLD} />
+              <Text style={styles.premiumText}>GOLD</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.rowDesc}>{desc}</Text>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onChange}
+        trackColor={{ false: COLORS.BORDER, true: COLORS.BRAND }}
+        thumbColor="#fff"
+      />
+    </View>
+  );
+}
+
+function ActionRow({ icon, label, onPress, danger }: any) {
+  return (
+    <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
+      <View style={[styles.rowIcon, danger && { backgroundColor: COLORS.ERROR_LIGHT }]}>
+        <Ionicons name={icon as any} size={18} color={danger ? COLORS.ERROR : COLORS.BRAND} />
+      </View>
+      <Text style={[styles.rowLabel, { flex: 1 }, danger && { color: COLORS.ERROR }]}>{label}</Text>
+      <Ionicons name="chevron-forward" size={16} color={COLORS.BORDER} />
+    </TouchableOpacity>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.BG },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 12, paddingVertical: 12,
+  },
+  backBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  title: { fontSize: 18, fontWeight: '800', color: COLORS.TEXT },
+
+  section: { marginTop: 20 },
+  sectionTitle: { fontSize: 12, fontWeight: '800', color: COLORS.TEXT_MUTED, letterSpacing: 1, textTransform: 'uppercase', paddingHorizontal: 24, marginBottom: 8 },
+  card: {
+    marginHorizontal: 16, backgroundColor: COLORS.SURFACE, borderRadius: 18, overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2,
+  },
+  optionRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  rowBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.BORDER_LIGHT },
+  optionIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: COLORS.BRAND_MUTED, justifyContent: 'center', alignItems: 'center' },
+  optionLabel: { fontSize: 14, fontWeight: '600', color: COLORS.TEXT },
+  optionDesc: { fontSize: 12, color: COLORS.TEXT_MUTED, marginTop: 2 },
+  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: COLORS.BORDER, justifyContent: 'center', alignItems: 'center' },
+  radioOn: { borderColor: COLORS.BRAND },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.BRAND },
+
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  rowIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: COLORS.BRAND_MUTED, justifyContent: 'center', alignItems: 'center' },
+  rowBody: { flex: 1 },
+  rowLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  rowLabel: { fontSize: 14, fontWeight: '600', color: COLORS.TEXT },
+  rowDesc: { fontSize: 12, color: COLORS.TEXT_MUTED, marginTop: 2, lineHeight: 16 },
+  premiumBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: COLORS.GOLD + '20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
+  },
+  premiumText: { fontSize: 9, fontWeight: '900', color: COLORS.GOLD, letterSpacing: 0.5 },
+});

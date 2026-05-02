@@ -1,0 +1,81 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Expo
+.expo/
+.expo-shared/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native build outputs
+ios/Pods/
+ios/build/
+ios/.xcode.env.local
+ios/DerivedData/
+android/.gradle/
+android/build/
+android/app/build/
+
+# Build artifacts
+build/
+.next/
+
+# Logs
+*.log
+npm-debug.*
+yarn-debug.log*
+yarn-error.log*
+
+# Secrets & local config — NEVER commit these
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.keystore
+google-services.json
+GoogleService-Info.plist
+
+# Local-only files generated for testing
+qr.html
+qr.png
+aura-qr.png
+setup-firewall.bat
+allow-expo-firewall.bat
+*.tunnel.url
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Editors & tooling
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+*~
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Testing
+coverage/
+.nyc_output/
+
+# Misc
+*.orig.*
+.cache/
+.tmp/

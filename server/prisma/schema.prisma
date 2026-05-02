@@ -1,0 +1,226 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum DateType {
+  DRESSING_UP
+  GROUP_DATE
+  TRENDY_GIRLY
+}
+
+enum ProposalStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum PaymentArrangement {
+  MAN_COVERS
+  SPLIT
+  EACH_PAYS_OWN
+}
+
+enum EventType {
+  DINNER_PARTY
+  DRINKS
+  ACTIVITY
+  CULTURAL
+  WELLNESS
+  OUTDOOR
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DrinkingPreference {
+  NEVER
+  SOCIALLY
+  REGULARLY
+}
+
+enum SmokingPreference {
+  NEVER
+  SOCIALLY
+  REGULARLY
+}
+
+model User {
+  id              String     @id @default(cuid())
+  email           String     @unique
+  passwordHash    String
+  city            String     @default("")
+  name            String?
+  gender          Gender?
+  genderInterest  Gender?
+  lookingFor      String?
+  dateTypes       DateType[]
+  eventInterests  EventType[]
+  maxDates        Int?
+  maxProposalsPerDay Int  @default(10)
+  freeProposalsUsed  Int      @default(0)
+  isSubscribed       Boolean  @default(false)
+  subscriptionExpiry DateTime?
+  dailyProposalCount Int      @default(0)
+  lastProposalDate   DateTime?
+  profileComplete Boolean    @default(false)
+  birthday        DateTime?
+  bio             String?
+  height          Int?
+  occupation      String?
+  interests       String[]
+  drinking        DrinkingPreference?
+  smoking         SmokingPreference?
+  languages       String[]
+  instagram       String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  photos            Photo[]
+  availability      Availability[]
+  interestsSent     Interest[]     @relation("interestFrom")
+  interestsReceived Interest[]     @relation("interestTo")
+  proposalsSent     DateProposal[] @relation("proposalFrom")
+  proposalsReceived DateProposal[] @relation("proposalTo")
+  eventsCreated     Event[]
+  eventApplications EventApplication[]
+}
+
+model Interest {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  fromUserId String
+  toUserId   String
+
+  from User @relation("interestFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  to   User @relation("interestTo", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@unique([fromUserId, toUserId])
+}
+
+model DateProposal {
+  id                  String              @id @default(cuid())
+  message             String
+  dateType            DateType?
+  restaurantChoice    String?
+  alternativePlan     String?
+  preferredDate       String?
+  preferredTime       String?
+  counterDate         String?
+  counterTime         String?
+  paymentArrangement  PaymentArrangement?
+  status              ProposalStatus      @default(PENDING)
+  createdAt           DateTime            @default(now())
+
+  fromUserId String
+  toUserId   String
+
+  from User @relation("proposalFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  to   User @relation("proposalTo", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@unique([fromUserId, toUserId])
+}
+
+model Event {
+  id          String    @id @default(cuid())
+  title       String
+  description String
+  location    String
+  eventDate   String
+  eventTime   String
+  spots       Int
+  eventType   EventType
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  organizerId String
+  organizer   User               @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  applications EventApplication[]
+}
+
+model EventApplication {
+  id        String            @id @default(cuid())
+  message   String            @default("")
+  status    ApplicationStatus @default(PENDING)
+  createdAt DateTime          @default(now())
+
+  eventId   String
+  event     Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  applicantId String
+  applicant   User @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, applicantId])
+}
+
+model FeedbackResponse {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  testerName  String?
+  testedAs    String
+  ageRange    String?
+
+  profileEase        Int?
+  profileWizardClear String?
+  photoUploadWorked  String?
+
+  triedProposing     String?
+  proposalWizardEase Int?
+  quotaSystemClear   String?
+  proposalComments   String?
+
+  browsedProposals          String?
+  proposalCardClarity       Int?
+  seriousnessScoreHelpful   String?
+  triedAcceptDecline        String?
+  triedCounterTime          String?
+  proposalBrowsingComments  String?
+
+  exploredEvents  String?
+  createdEvent    String?
+  appliedToEvent  String?
+  eventComments   String?
+
+  overallRating       Int?
+  likedMost           String?
+  confusingOrUnclear  String?
+  bugsFound           String?
+  wouldUseForReal     String?
+  additionalComments  String?
+}
+
+model Photo {
+  id     String  @id @default(cuid())
+  url    String
+  isMain Boolean @default(false)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Availability {
+  id    String @id @default(cuid())
+  month Int
+  year  Int
+  slot  Int
+  label String
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, month, year, slot])
+}
