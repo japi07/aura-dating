@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { COLORS } from '@/constants/colors';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -36,9 +38,52 @@ export default function CreateProposalScreen() {
   const [preferredTime, setPreferredTime] = useState('');
   const [paymentArrangement, setPaymentArrangement] = useState('');
 
+  // Mandatory video introduction
+  const [videoUri, setVideoUri] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
+  const [recording, setRecording] = useState(false);
+
+  const previewPlayer = useVideoPlayer(videoUri ?? '', (p) => {
+    p.loop = true;
+    p.muted = true;
+  });
+
+  const recordVideo = async () => {
+    setRecording(true);
+    try {
+      const cam = await ImagePicker.requestCameraPermissionsAsync();
+      if (!cam.granted) {
+        Alert.alert('Camera permission needed', 'We need camera access so you can record your video introduction.');
+        return;
+      }
+      const mic = await ImagePicker.requestMicrophonePermissionsAsync?.();
+      if (mic && !mic.granted) {
+        Alert.alert('Microphone permission needed', 'A silent video isn\'t much of an introduction — we need mic access.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['videos'],
+        videoMaxDuration: 30,
+        videoQuality: 1,
+        cameraType: ImagePicker.CameraType.front,
+      });
+      if (!result.canceled && result.assets[0]) {
+        const a = result.assets[0];
+        setVideoUri(a.uri);
+        setVideoDuration(a.duration ? Math.round(a.duration / 1000) : null);
+        try { previewPlayer.replace(a.uri); previewPlayer.play(); } catch {}
+      }
+    } catch (e: any) {
+      Alert.alert('Could not record', e?.message || 'Please try again.');
+    } finally {
+      setRecording(false);
+    }
+  };
+
   const validateForm = () => {
     const e: Record<string, string> = {};
-    if (!message.trim()) e.message = 'Please write a personal message';
+    if (!videoUri) e.video = 'A video introduction is required for every proposal';
+    if (!message.trim()) e.message = 'Please write a short caption to go with your video';
     else if (message.length < 10) e.message = 'At least 10 characters';
     if (!dateType) e.dateType = 'Select a date type';
     if (!preferredDate.trim()) e.preferredDate = 'Date is required';
@@ -88,12 +133,77 @@ export default function CreateProposalScreen() {
           </View>
         </View>
 
-        {/* Message */}
+        {/* Mandatory video introduction — sits first because every proposal needs it */}
+        <View style={[styles.videoCard, errors.video && { borderColor: COLORS.ERROR }]}>
+          <View style={styles.videoHeader}>
+            <View style={styles.videoIcon}>
+              <Ionicons name="videocam" size={16} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.videoTitle}>Record a video introduction</Text>
+              <Text style={styles.videoSubtitle}>
+                Required · 5–30 seconds. Show your face — say hello, why this date, why her.
+              </Text>
+            </View>
+            <View style={styles.requiredBadge}>
+              <Text style={styles.requiredText}>REQUIRED</Text>
+            </View>
+          </View>
+
+          {videoUri ? (
+            <View style={styles.videoPreview}>
+              <VideoView
+                player={previewPlayer}
+                style={StyleSheet.absoluteFillObject}
+                contentFit="cover"
+                nativeControls={false}
+              />
+              <View style={styles.videoOverlay}>
+                <View style={styles.videoBadge}>
+                  <Ionicons name="checkmark" size={12} color="#fff" />
+                  <Text style={styles.videoBadgeText}>
+                    Recorded{videoDuration ? ` · ${videoDuration}s` : ''}
+                  </Text>
+                </View>
+                <TouchableOpacity style={styles.retakeBtn} onPress={recordVideo}>
+                  <Ionicons name="refresh" size={14} color="#fff" />
+                  <Text style={styles.retakeText}>Retake</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.recordBtn, recording && { opacity: 0.6 }]}
+              onPress={recordVideo}
+              disabled={recording}
+              activeOpacity={0.85}
+            >
+              <View style={styles.recordIconWrap}>
+                <View style={styles.recordIconDot} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.recordTitle}>{recording ? 'Opening camera…' : 'Tap to record'}</Text>
+                <Text style={styles.recordHint}>Front camera · max 30 seconds</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={COLORS.BRAND} />
+            </TouchableOpacity>
+          )}
+
+          {errors.video && <Text style={styles.err}>{errors.video}</Text>}
+
+          <View style={styles.tipsRow}>
+            <View style={styles.tipChip}><Ionicons name="happy-outline" size={11} color={COLORS.GOLD_DEEP} /><Text style={styles.tipText}>Be yourself</Text></View>
+            <View style={styles.tipChip}><Ionicons name="sunny-outline" size={11} color={COLORS.GOLD_DEEP} /><Text style={styles.tipText}>Good light</Text></View>
+            <View style={styles.tipChip}><Ionicons name="time-outline" size={11} color={COLORS.GOLD_DEEP} /><Text style={styles.tipText}>Keep it short</Text></View>
+          </View>
+        </View>
+
+        {/* Caption to accompany the video */}
         <View style={styles.card}>
           <Input
-            label="Your Personal Message"
-            placeholder="Tell her why you'd like to take her out and what inspired this plan..."
-            value={message} onChangeText={setMessage} multiline numberOfLines={4} error={errors.message}
+            label="Caption to go with your video"
+            placeholder="Two sentences that match your video — what you said, why this place..."
+            value={message} onChangeText={setMessage} multiline numberOfLines={3} error={errors.message}
           />
         </View>
 
@@ -213,4 +323,63 @@ const styles = StyleSheet.create({
   payIconOn: { backgroundColor: COLORS.PRIMARY },
   payLbl: { flex: 1, fontSize: 13, fontWeight: '600', color: COLORS.TEXT_SECONDARY },
   payLblOn: { color: COLORS.PRIMARY, fontWeight: '700' },
+
+  /* Video introduction block */
+  videoCard: {
+    backgroundColor: COLORS.SURFACE, borderRadius: 18, padding: 16, marginBottom: 12,
+    borderWidth: 1.5, borderColor: COLORS.BRAND_MUTED,
+    shadowColor: '#1A0F26', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
+  },
+  videoHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  videoIcon: {
+    width: 36, height: 36, borderRadius: 12, backgroundColor: COLORS.BRAND,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  videoTitle: { fontSize: 15, fontWeight: '800', color: COLORS.TEXT, letterSpacing: -0.2 },
+  videoSubtitle: { fontSize: 11, color: COLORS.TEXT_MUTED, marginTop: 2, lineHeight: 15 },
+  requiredBadge: {
+    backgroundColor: COLORS.BRAND, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
+  },
+  requiredText: { fontSize: 9, fontWeight: '900', color: '#fff', letterSpacing: 1 },
+
+  recordBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingVertical: 16, paddingHorizontal: 14, borderRadius: 14,
+    backgroundColor: COLORS.BRAND_MUTED,
+    borderWidth: 1.5, borderColor: COLORS.BRAND, borderStyle: 'dashed',
+  },
+  recordIconWrap: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff',
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2, borderColor: COLORS.BRAND,
+  },
+  recordIconDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: COLORS.BRAND },
+  recordTitle: { fontSize: 14, fontWeight: '800', color: COLORS.BRAND },
+  recordHint: { fontSize: 11, color: COLORS.TEXT_MUTED, marginTop: 2 },
+
+  videoPreview: {
+    width: '100%', aspectRatio: 9 / 13, borderRadius: 14, overflow: 'hidden',
+    backgroundColor: '#15121F',
+  },
+  videoOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    padding: 10, justifyContent: 'space-between', flexDirection: 'column',
+  },
+  videoBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start',
+    backgroundColor: COLORS.LIKE, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12,
+  },
+  videoBadgeText: { fontSize: 11, fontWeight: '800', color: '#fff' },
+  retakeBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 14,
+  },
+  retakeText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+
+  tipsRow: { flexDirection: 'row', gap: 6, marginTop: 12, flexWrap: 'wrap' },
+  tipChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: COLORS.GOLD_MUTED, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 10,
+  },
+  tipText: { fontSize: 11, fontWeight: '700', color: COLORS.GOLD_DEEP },
 });

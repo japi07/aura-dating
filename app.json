@@ -65,7 +65,15 @@
         "expo-image-picker",
         {
           "photosPermission": "Allow Aura to access your photos.",
-          "cameraPermission": "Allow Aura to use your camera for the verified-human selfie check."
+          "cameraPermission": "Allow Aura to use your camera for the verified-human selfie check and video introductions.",
+          "microphonePermission": "Allow Aura to use your microphone so your video introduction has sound."
+        }
+      ],
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": false,
+          "supportsPictureInPicture": false
         }
       ],
       [

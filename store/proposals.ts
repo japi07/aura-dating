@@ -32,6 +32,12 @@ export interface Proposal {
   startsAt: string; // ISO datetime
   payment: 'he-pays' | 'split' | 'she-pays';
   message: string;
+  /** Mandatory short video introduction recorded by the proposer */
+  videoUrl: string;
+  /** Optional poster frame shown before playback */
+  videoPoster?: string;
+  /** Video duration in seconds (recorded) */
+  videoDurationSec?: number;
 }
 
 export type Decision = 'accepted' | 'declined' | 'expired';
@@ -120,16 +126,28 @@ function pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length
  * Build today's curated proposal. Quality > quantity — one carefully-chosen
  * match per day. Same proposal stays stable for the day (deterministic by date).
  */
+// Public sample videos used for demo proposals (in production these would
+// be uploaded clips from each proposer, stored in our CDN)
+const DEMO_VIDEOS = [
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4',
+];
+
 function buildSeedProposals(): Proposal[] {
   // Pool of beautifully-curated London proposals; we'll rotate one per day
-  const candidates: Array<{ venueId: string; photoIdx: number }> = [
-    { venueId: 'v_padella',     photoIdx: 11 },
-    { venueId: 'v_monmouth',    photoIdx: 13 },
-    { venueId: 'v_tate_modern', photoIdx: 15 },
-    { venueId: 'v_dishoom_sho', photoIdx: 17 },
-    { venueId: 'v_lyaness',     photoIdx: 18 },
-    { venueId: 'v_hampstead',   photoIdx: 20 },
-    { venueId: 'v_columbia',    photoIdx: 22 },
+  const candidates: Array<{ venueId: string; photoIdx: number; videoIdx: number }> = [
+    { venueId: 'v_padella',     photoIdx: 11, videoIdx: 0 },
+    { venueId: 'v_monmouth',    photoIdx: 13, videoIdx: 1 },
+    { venueId: 'v_tate_modern', photoIdx: 15, videoIdx: 2 },
+    { venueId: 'v_dishoom_sho', photoIdx: 17, videoIdx: 3 },
+    { venueId: 'v_lyaness',     photoIdx: 18, videoIdx: 4 },
+    { venueId: 'v_hampstead',   photoIdx: 20, videoIdx: 5 },
+    { venueId: 'v_columbia',    photoIdx: 22, videoIdx: 6 },
   ];
   // Use day-of-year as a stable seed so the proposal doesn't change mid-day
   const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
@@ -172,6 +190,9 @@ function buildSeedProposals(): Proposal[] {
     startsAt,
     payment: pick(PAYMENTS),
     message,
+    videoUrl: DEMO_VIDEOS[choice.videoIdx % DEMO_VIDEOS.length],
+    videoPoster: `https://i.pravatar.cc/800?img=${choice.photoIdx}`,
+    videoDurationSec: 15,
   }];
 }
 

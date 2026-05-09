@@ -1,0 +1,260 @@
+AURA DATING MOBILE APP - COMPLETE FILE MANIFEST
+================================================
+
+PROJECT ROOT CONFIGURATION
+==========================
+✓ package.json                 - NPM dependencies and scripts
+✓ app.json                     - Expo app configuration
+✓ tsconfig.json                - TypeScript configuration
+✓ .gitignore                   - Git ignore rules
+✓ expo-env.d.ts                - TypeScript environment definitions
+
+DOCUMENTATION
+==============
+✓ README.md                    - Project overview and features
+✓ SETUP.md                     - Installation and setup guide
+✓ PROJECT_SUMMARY.md           - Detailed implementation summary
+✓ FILE_MANIFEST.txt            - This file
+
+APP ROUTING & NAVIGATION
+========================
+ROOT LAYOUT
+✓ app/_layout.tsx              - Root layout with auth guard, SafeAreaProvider, StatusBar
+
+AUTH FLOWS
+✓ app/auth/_layout.tsx         - Auth stack navigator
+✓ app/auth/login.tsx           - Login screen with email/password and demo mode
+✓ app/auth/register.tsx        - 3-step registration wizard
+
+MAIN TABS
+✓ app/(tabs)/_layout.tsx       - Tab navigator (5 tabs with Ionicons)
+✓ app/(tabs)/index.tsx         - Discover screen (animated swipe cards)
+✓ app/(tabs)/members.tsx       - Members list (grid layout, search, refresh)
+✓ app/(tabs)/events.tsx        - Events listing (filters, FAB, event cards)
+✓ app/(tabs)/connections.tsx   - Connections (3 tabs: received/sent/matched)
+✓ app/(tabs)/profile.tsx       - User profile (info, settings, logout)
+
+DETAIL & MODAL SCREENS
+✓ app/onboarding.tsx           - Profile completion for new users
+✓ app/members/_layout.tsx      - Members navigation stack
+✓ app/members/[userId].tsx     - Member detail screen (profile view)
+✓ app/events/_layout.tsx       - Events navigation stack
+✓ app/events/[eventId].tsx     - Event detail screen (attendees, apply)
+✓ app/events/create.tsx        - Create event form
+✓ app/proposal/_layout.tsx     - Proposal navigation stack
+✓ app/proposal/create.tsx      - Date proposal form
+
+STATE MANAGEMENT & API
+======================
+✓ store/auth.ts                - Zustand auth store with secure storage
+✓ lib/api.ts                   - Axios API client with interceptors
+✓ constants/api.ts             - API endpoint definitions
+✓ constants/colors.ts          - Color palette and design tokens
+
+REUSABLE COMPONENTS
+===================
+✓ components/Button.tsx        - Primary/secondary/danger button variants
+✓ components/Input.tsx         - Text input with label, error, icon
+✓ components/Card.tsx          - Card container with shadow option
+✓ components/Avatar.tsx        - Profile avatar with fallback
+✓ components/Badge.tsx         - Status/type badges with variants
+✓ components/InterestTag.tsx   - Selectable interest tag chips
+
+COMPONENT FEATURES
+==================
+
+Button Component
+- Variants: primary, secondary, danger
+- Sizes: sm, md, lg
+- Loading state with spinner
+- Disabled state
+- Full customization via props
+
+Input Component
+- Label and error message support
+- Password toggle for secure entries
+- Icon support (Ionicons)
+- Multiline support with adjustable height
+- Focus/blur states with visual feedback
+- Placeholder text in muted color
+
+Card Component
+- Optional shadow effect
+- Border and rounded corners
+- Customizable padding
+- Flexible content layout
+
+Avatar Component
+- Three sizes: sm, md, lg
+- Image or icon fallback
+- Circular shape with proper scaling
+- Border support
+
+Badge Component
+- Multiple variants: default, success, error, warning, info
+- Two sizes: sm, md
+- Color-coded by variant
+- Text and background colors
+
+InterestTag Component
+- Toggle selection
+- Border and background on select
+- Consistent styling with color scheme
+- Tap feedback
+
+SCREEN FEATURES
+===============
+
+Discover Screen (Swipe Cards)
+- Animated pan responder
+- Swipe left = pass, right = interested
+- Visual feedback labels
+- Statistics counter
+- 5 demo profiles included
+- Gesture animation with spring physics
+
+Login Screen
+- Email validation
+- Password validation
+- Demo mode button
+- Link to registration
+- Professional styling
+- Form validation feedback
+
+Registration Screen
+- 3-step wizard with progress bar
+- Step 1: Name, email, password
+- Step 2: Birthday, gender, preferences, city
+- Step 3: Bio, interests picker, photo upload
+- Full form validation
+- Back/Next navigation
+
+Members Screen
+- 2-column grid layout
+- Search by name/city
+- Pull-to-refresh
+- Card view with photo, name, age, city
+- Tap navigation to detail
+
+Events Screen
+- Event cards with details
+- Filter by type (Social, Activity, Workshop, Dinner)
+- Progress bar for available spots
+- Location and time display
+- FAB button for creating events
+- Event application system
+
+Connections Screen
+- 3 tabs with counts
+- Interests received with accept/decline
+- Interests sent display
+- Matched connections with date proposal option
+- Connection cards with status badges
+
+Profile Screen
+- Profile photo and info
+- Bio section
+- Interests display
+- Preferences (gender, looking for)
+- Settings section
+- Help & support
+- Logout button
+
+Member Detail Screen
+- Full photo display
+- Bio and interests
+- Detailed preferences
+- Send interest button
+- Visual feedback
+
+Event Detail Screen
+- Full event description
+- Location and address
+- Date/time information
+- Organizer info
+- Attendees list with avatars
+- Application status
+- Apply button
+
+Event Creation Screen
+- Title input
+- Description (multiline)
+- Location input
+- Date and time pickers
+- Event type selector (4 options)
+- Max spots input
+- Form validation
+
+Date Proposal Screen
+- Recipient display
+- Message textarea
+- Date type selector (3 options)
+- Restaurant choice
+- Alternative plan
+- Preferred date and time
+- Payment arrangement radio options
+- Send button
+
+SCREEN COUNTS
+=============
+- Root layout: 1
+- Auth flows: 3
+- Tab screens: 5
+- Modal/Detail screens: 7
+- Layout files: 5
+Total screens: 21
+
+COMPONENT COUNTS
+================
+- Reusable UI components: 6
+- Root layout: 1
+- Tab layout: 1
+- Auth layout: 1
+- Other layouts: 3
+Total component files: 12
+
+STYLING APPROACH
+================
+- All styles use React Native StyleSheet.create()
+- No external CSS frameworks
+- Centralized color palette
+- Consistent spacing scale
+- Responsive design patterns
+- Platform-specific handling where needed
+
+ICON USAGE
+==========
+- All icons from @expo/vector-icons (Ionicons)
+- Common icons: home, people, calendar, heart, person, etc.
+- Consistent sizing and color theming
+- Icon colors from palette
+
+API STRUCTURE
+=============
+- Base URL: http://localhost:3001/api
+- Token-based auth (Bearer scheme)
+- Secure storage with Expo Secure Store
+- Request/response interceptors
+- Auto-logout on 401
+- Error handling
+
+TOTAL FILE COUNT
+================
+Configuration:     4 files
+Documentation:     4 files
+Routing/Screens:  18 files
+Components:        6 files
+State/API:         4 files
+Type Definitions:  1 file
+========================
+TOTAL:            37 files
+
+All files are fully implemented with:
+✓ Complete functionality
+✓ Proper TypeScript types
+✓ Error handling
+✓ Form validation
+✓ Loading states
+✓ Demo data fallback
+✓ No placeholder code
+

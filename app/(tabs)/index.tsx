@@ -8,6 +8,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '@/constants/colors';
+import { VideoMessage } from '@/components/VideoMessage';
 import { useAuthStore } from '@/store/auth';
 import { useProposalsStore, type Proposal } from '@/store/proposals';
 import { useDatesStore } from '@/store/dates';
@@ -234,10 +235,18 @@ export default function TodayScreen() {
                   <Text style={styles.venueArea}>{formatTime(proposal.startsAt)}</Text>
                 </View>
 
-                {/* Quote */}
-                <View style={styles.quoteCard}>
-                  <Ionicons name="chatbubble" size={14} color={COLORS.BRAND} style={styles.quoteIcon} />
-                  <Text style={styles.quoteText}>{proposal.message}</Text>
+                {/* Video message — mandatory for every proposal */}
+                <VideoMessage
+                  videoUrl={proposal.videoUrl}
+                  poster={proposal.videoPoster}
+                  durationSec={proposal.videoDurationSec}
+                  fromName={proposal.from.name}
+                />
+
+                {/* Caption (his written message accompanying the video) */}
+                <View style={styles.captionCard}>
+                  <Ionicons name="chatbubble-outline" size={13} color={COLORS.BRAND} />
+                  <Text style={styles.captionText}>{proposal.message}</Text>
                 </View>
 
                 {/* Why we matched — gold-trim card */}
@@ -447,15 +456,14 @@ const styles = StyleSheet.create({
   venueArea: { fontSize: 13, color: COLORS.TEXT_SECONDARY, fontWeight: '600', letterSpacing: 0.2 },
   miniDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: COLORS.BORDER },
 
-  quoteCard: {
-    backgroundColor: COLORS.GOLD_MUTED, borderRadius: 18, padding: 18, marginBottom: 18,
+  captionCard: {
+    flexDirection: 'row', gap: 10, alignItems: 'flex-start',
+    backgroundColor: COLORS.GOLD_MUTED, borderRadius: 14, padding: 12, marginBottom: 18,
     borderWidth: 1, borderColor: COLORS.GOLD_LIGHT + '60',
-    position: 'relative', paddingTop: 22,
   },
-  quoteIcon: { position: 'absolute', top: -10, left: 18, backgroundColor: COLORS.SURFACE, padding: 6, borderRadius: 12 },
-  quoteText: {
-    fontSize: 15, color: COLORS.TEXT, lineHeight: 24, fontStyle: 'italic',
-    letterSpacing: 0.1,
+  captionText: {
+    flex: 1, fontSize: 13, color: COLORS.TEXT_SECONDARY, lineHeight: 20,
+    fontStyle: 'italic',
   },
 
   whyCard: {
