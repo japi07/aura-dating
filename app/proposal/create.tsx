@@ -97,10 +97,12 @@ export default function CreateProposalScreen() {
     if (!validateForm()) return;
     setLoading(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Simulate network delay so the loading state is visible
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
       Alert.alert(
-        'Proposal Sent',
-        `Your thoughtful proposal has been sent to ${userName}. They'll be in touch if they accept.`,
+        '✨ Proposal sent',
+        `Your video and date plan have been delivered to ${userName}. They have 24 hours to accept or pass.\n\nYou'll be notified the moment they decide.`,
         [{ text: 'Done', onPress: () => router.back() }],
       );
     } catch (error: any) {

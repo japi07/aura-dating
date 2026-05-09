@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, TouchableOpacity,
   StatusBar,
@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
+import { useSettingsStore } from '@/store/settings';
 
 const DATE_TYPES = [
   { id: 'dinner', label: 'Dinner', emoji: '🍷' },
@@ -31,19 +32,35 @@ const INTENTIONS = [
 
 export default function PreferencesScreen() {
   const router = useRouter();
-  const [selectedTypes, setSelectedTypes] = useState<string[]>(['dinner', 'coffee', 'walk', 'gallery']);
-  const [ageMin, setAgeMin] = useState(26);
-  const [ageMax, setAgeMax] = useState(38);
-  const [radius, setRadius] = useState(15);
-  const [availableDays, setAvailableDays] = useState<string[]>(['Fri', 'Sat', 'Sun']);
-  const [intention, setIntention] = useState('serious');
-  const [proposalsPerDay, setProposalsPerDay] = useState(3);
+  const { dates, hydrate, isHydrated, updateDates } = useSettingsStore();
+
+  useEffect(() => { if (!isHydrated) hydrate(); }, []);
+
+  const selectedTypes = dates.dateTypes;
+  const ageMin = dates.ageMin;
+  const ageMax = dates.ageMax;
+  const radius = dates.radiusKm;
+  const availableDays = dates.availableDays;
+  const intention = dates.intention;
+  const proposalsPerDay = dates.proposalsPerDay;
+
+  const setAgeMin = (v: number) => updateDates({ ageMin: v });
+  const setAgeMax = (v: number) => updateDates({ ageMax: v });
+  const setRadius = (v: number) => updateDates({ radiusKm: v });
+  const setIntention = (v: any) => updateDates({ intention: v });
+  const setProposalsPerDay = (v: any) => updateDates({ proposalsPerDay: v });
 
   const toggleType = (id: string) => {
-    setSelectedTypes((prev) => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    const next = selectedTypes.includes(id)
+      ? selectedTypes.filter(x => x !== id)
+      : [...selectedTypes, id];
+    updateDates({ dateTypes: next });
   };
   const toggleDay = (day: string) => {
-    setAvailableDays((prev) => prev.includes(day) ? prev.filter(x => x !== day) : [...prev, day]);
+    const next = availableDays.includes(day)
+      ? availableDays.filter(x => x !== day)
+      : [...availableDays, day];
+    updateDates({ availableDays: next });
   };
 
   return (

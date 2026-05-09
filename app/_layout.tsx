@@ -5,6 +5,7 @@ import { Stack } from 'expo-router';
 import { useAuthStore } from '@/store/auth';
 import { useProposalsStore } from '@/store/proposals';
 import { useDatesStore } from '@/store/dates';
+import { useSettingsStore } from '@/store/settings';
 import { COLORS } from '@/constants/colors';
 import {
   registerForPushNotifications,
@@ -15,6 +16,7 @@ export default function RootLayout() {
   const { token, user, hydrate } = useAuthStore();
   const hydrateProposals = useProposalsStore((s) => s.hydrate);
   const hydrateDates = useDatesStore((s) => s.hydrate);
+  const hydrateSettings = useSettingsStore((s) => s.hydrate);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -22,7 +24,7 @@ export default function RootLayout() {
       // 1. Restore auth state
       await hydrate();
       // 2. Hydrate persistent app state in parallel
-      await Promise.all([hydrateProposals(), hydrateDates()]);
+      await Promise.all([hydrateProposals(), hydrateDates(), hydrateSettings()]);
       // 3. Mark ready so first frame can render
       setIsReady(true);
     })();

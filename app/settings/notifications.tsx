@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, TouchableOpacity,
   Switch, StatusBar,
@@ -7,41 +7,38 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
+import { useSettingsStore, type NotificationPrefs } from '@/store/settings';
 
-interface Toggle {
-  key: string; label: string; desc: string; icon: string; value: boolean;
-}
+interface Row { key: keyof NotificationPrefs; label: string; desc: string; icon: string; }
 
-const INITIAL: Record<string, Toggle[]> = {
+const GROUPS: Record<string, Row[]> = {
   Proposals: [
-    { key: 'newProposal', label: 'New proposal received', desc: 'When someone sends you a date proposal', icon: 'mail', value: true },
-    { key: 'proposalReminder', label: 'Daily proposal reminder', desc: 'A 9 AM ping when fresh proposals are ready', icon: 'sunny', value: true },
-    { key: 'proposalExpiring', label: 'Proposal expiring soon', desc: '6 hours before a proposal auto-passes', icon: 'time', value: true },
+    { key: 'newProposal',      label: 'New proposal received',     desc: 'When someone sends you a date proposal',         icon: 'mail' },
+    { key: 'proposalReminder', label: 'Daily proposal reminder',   desc: 'A 9 AM ping when fresh proposals are ready',     icon: 'sunny' },
+    { key: 'proposalExpiring', label: 'Proposal expiring soon',    desc: '6 hours before a proposal auto-passes',          icon: 'time' },
   ],
   Dates: [
-    { key: 'dateConfirmed', label: 'Date confirmed', desc: 'When the other person confirms a date', icon: 'checkmark-circle', value: true },
-    { key: 'dateReminder', label: 'Date reminder', desc: '2 hours and 30 min before your date', icon: 'alarm', value: true },
-    { key: 'dateRescheduled', label: 'Date rescheduled or cancelled', desc: 'Important: always recommended', icon: 'alert-circle', value: true },
-    { key: 'dateRecap', label: 'Post-date check-in', desc: 'Rate your date the next morning', icon: 'star', value: true },
+    { key: 'dateConfirmed',    label: 'Date confirmed',            desc: 'When the other person confirms a date',          icon: 'checkmark-circle' },
+    { key: 'dateReminder',     label: 'Date reminder',             desc: '2 hours and 30 min before your date',            icon: 'alarm' },
+    { key: 'dateRescheduled',  label: 'Date rescheduled or cancelled', desc: 'Important: always recommended',              icon: 'alert-circle' },
+    { key: 'dateRecap',        label: 'Post-date check-in',        desc: 'Rate your date the next morning',                icon: 'star' },
   ],
   Community: [
-    { key: 'eventNearby', label: 'New events near you', desc: 'Curated group events you might love', icon: 'sparkles', value: true },
-    { key: 'newsletter', label: 'Aura Weekly digest', desc: 'Stories, tips & seasonal date ideas', icon: 'newspaper', value: false },
-    { key: 'productUpdates', label: 'Product updates', desc: 'New features and improvements', icon: 'gift', value: false },
+    { key: 'eventNearby',      label: 'New events near you',       desc: 'Curated group events you might love',            icon: 'sparkles' },
+    { key: 'newsletter',       label: 'Aura Weekly digest',        desc: 'Stories, tips & seasonal date ideas',            icon: 'newspaper' },
+    { key: 'productUpdates',   label: 'Product updates',           desc: 'New features and improvements',                  icon: 'gift' },
   ],
 };
 
 export default function NotificationsScreen() {
   const router = useRouter();
-  const [groups, setGroups] = useState(INITIAL);
-  const [allMuted, setAllMuted] = useState(false);
+  const { notifications, hydrate, isHydrated, updateNotifications } = useSettingsStore();
+  const allMuted = notifications.allMuted;
 
-  const toggle = (group: string, key: string) => {
-    setGroups((g) => ({
-      ...g,
-      [group]: g[group].map((t) => t.key === key ? { ...t, value: !t.value } : t),
-    }));
-  };
+  useEffect(() => { if (!isHydrated) hydrate(); }, []);
+
+  const toggleAll = (val: boolean) => updateNotifications({ allMuted: val });
+  const toggle = (key: keyof NotificationPrefs) => updateNotifications({ [key]: !notifications[key] } as any);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -67,13 +64,13 @@ export default function NotificationsScreen() {
           </View>
           <Switch
             value={allMuted}
-            onValueChange={setAllMuted}
+            onValueChange={toggleAll}
             trackColor={{ false: COLORS.BORDER, true: COLORS.BRAND }}
             thumbColor="#fff"
           />
         </View>
 
-        {Object.entries(groups).map(([groupName, items]) => (
+        {Object.entries(GROUPS).map(([groupName, items]) => (
           <View key={groupName} style={styles.section}>
             <Text style={styles.sectionTitle}>{groupName}</Text>
             <View style={styles.card}>
@@ -87,8 +84,8 @@ export default function NotificationsScreen() {
                     <Text style={styles.rowDesc}>{t.desc}</Text>
                   </View>
                   <Switch
-                    value={t.value && !allMuted}
-                    onValueChange={() => toggle(groupName, t.key)}
+                    value={notifications[t.key] && !allMuted}
+                    onValueChange={() => toggle(t.key)}
                     disabled={allMuted}
                     trackColor={{ false: COLORS.BORDER, true: COLORS.BRAND }}
                     thumbColor="#fff"

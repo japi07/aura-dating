@@ -59,7 +59,7 @@ export default function OnboardingScreen() {
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true, aspect: [1, 1], quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) setPhotoUri(result.assets[0].uri);
@@ -91,23 +91,44 @@ export default function OnboardingScreen() {
     }
   };
 
+  const computeAge = (str: string): number | undefined => {
+    if (!str) return undefined;
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(str.trim());
+    const d = m ? new Date(`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`) : new Date(str);
+    if (isNaN(d.getTime())) return undefined;
+    const now = new Date();
+    let age = now.getFullYear() - d.getFullYear();
+    if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) age--;
+    return age;
+  };
+
   const handleComplete = async () => {
     setLoading(true);
+    const age = computeAge(birthday);
+
+    // Always update the local store first — that's the source of truth for the UI.
+    // Then attempt to sync with the backend; if it fails we still proceed.
+    if (user) {
+      setUser({
+        ...user,
+        profileComplete: true,
+        age, birthday, city, bio,
+        gender: gender.toLowerCase(),
+        genderInterest: genderInterest.toLowerCase(),
+        interests: selectedInterests,
+        photoUrl: photoUri || user.photoUrl,
+      });
+    }
+
     try {
-      const response = await profileApi.updateProfile({
+      await profileApi.updateProfile({
         birthday, gender, genderInterest, city, bio, interests: selectedInterests,
       });
-      if (user) {
-        setUser({
-          ...user, profileComplete: true, birthday, gender, genderInterest, city, bio,
-          interests: selectedInterests, photoUrl: response.photoUrl || user.photoUrl,
-        });
-      }
-      router.replace('/');
-    } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.message || 'An error occurred');
+    } catch {
+      // Backend not reachable in offline mode — local state already saved
     } finally {
       setLoading(false);
+      router.replace('/');
     }
   };
 

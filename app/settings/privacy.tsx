@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, TouchableOpacity,
-  Switch, StatusBar,
+  Switch, StatusBar, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
+import { useSettingsStore } from '@/store/settings';
+import { useAuthStore } from '@/store/auth';
 
 const VISIBILITY_OPTIONS = [
   { key: 'all', label: 'All verified men', desc: 'Maximum visibility — recommended', icon: 'eye' },
@@ -16,13 +18,51 @@ const VISIBILITY_OPTIONS = [
 
 export default function PrivacyScreen() {
   const router = useRouter();
-  const [visibility, setVisibility] = useState('all');
-  const [showLastSeen, setShowLastSeen] = useState(false);
-  const [readReceipts, setReadReceipts] = useState(true);
-  const [hideAge, setHideAge] = useState(false);
-  const [hideJob, setHideJob] = useState(false);
-  const [incognito, setIncognito] = useState(false);
-  const [shareAnalytics, setShareAnalytics] = useState(true);
+  const { privacy, hydrate, isHydrated, updatePrivacy } = useSettingsStore();
+  const { logout } = useAuthStore();
+
+  useEffect(() => { if (!isHydrated) hydrate(); }, []);
+
+  const visibility = privacy.visibility;
+  const setVisibility = (v: typeof privacy.visibility) => updatePrivacy({ visibility: v });
+  const showLastSeen = privacy.showLastSeen;
+  const setShowLastSeen = (v: boolean) => updatePrivacy({ showLastSeen: v });
+  const readReceipts = privacy.readReceipts;
+  const setReadReceipts = (v: boolean) => updatePrivacy({ readReceipts: v });
+  const hideAge = privacy.hideAge;
+  const setHideAge = (v: boolean) => updatePrivacy({ hideAge: v });
+  const hideJob = privacy.hideJob;
+  const setHideJob = (v: boolean) => updatePrivacy({ hideJob: v });
+  const incognito = privacy.incognito;
+  const setIncognito = (v: boolean) => updatePrivacy({ incognito: v });
+  const shareAnalytics = privacy.shareAnalytics;
+  const setShareAnalytics = (v: boolean) => updatePrivacy({ shareAnalytics: v });
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete account?',
+      'All your data will be permanently removed. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete account',
+          style: 'destructive',
+          onPress: async () => {
+            await logout();
+            router.replace('/auth/login');
+          },
+        },
+      ],
+    );
+  };
+
+  const handleDownloadData = () => {
+    Alert.alert(
+      'Download my data',
+      'We\'ll prepare a JSON archive of your profile, proposals and dates and email it to you within 24 hours.',
+      [{ text: 'OK' }],
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -87,8 +127,8 @@ export default function PrivacyScreen() {
           <Text style={styles.sectionTitle}>Data</Text>
           <View style={styles.card}>
             <ToggleRow icon="analytics" label="Help improve Aura" desc="Anonymous usage analytics" value={shareAnalytics} onChange={setShareAnalytics} border />
-            <ActionRow icon="download" label="Download my data" onPress={() => {}} />
-            <ActionRow icon="trash" label="Delete my account" onPress={() => {}} danger />
+            <ActionRow icon="download" label="Download my data" onPress={handleDownloadData} />
+            <ActionRow icon="trash" label="Delete my account" onPress={handleDeleteAccount} danger />
           </View>
         </View>
       </ScrollView>
