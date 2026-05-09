@@ -88,25 +88,91 @@ export default function RegisterScreen() {
     if (!result.canceled && result.assets[0]) setPhotoUri(result.assets[0].uri);
   };
 
+  /**
+   * Compute age from a yyyy-mm-dd, dd/mm/yyyy or any Date-parseable birthday string.
+   */
+  const computeAge = (birthdayStr: string): number | undefined => {
+    if (!birthdayStr) return undefined;
+    // Accept dd/mm/yyyy as well as ISO
+    const ddmmyyyy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(birthdayStr.trim());
+    const d = ddmmyyyy
+      ? new Date(`${ddmmyyyy[3]}-${ddmmyyyy[2].padStart(2, '0')}-${ddmmyyyy[1].padStart(2, '0')}`)
+      : new Date(birthdayStr);
+    if (isNaN(d.getTime())) return undefined;
+    const now = new Date();
+    let age = now.getFullYear() - d.getFullYear();
+    const m = now.getMonth() - d.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+    return age;
+  };
+
+  /**
+   * Register the user. Tries the backend first; if it's unreachable
+   * (no server / offline / wrong env), falls back to creating a local
+   * account so you can keep exploring the app without a backend.
+   */
   const handleRegister = async () => {
     if (!validateStep3()) return;
     setLoading(true);
+
+    const age = computeAge(birthday);
+    const localUser: User = {
+      id: `local_${Date.now()}`,
+      email,
+      name,
+      profileComplete: true,
+      age,
+      birthday,
+      city,
+      bio,
+      interests: selectedInterests,
+      gender: gender.toLowerCase(),
+      genderInterest: genderInterest.toLowerCase(),
+      photoUrl: photoUri || `https://i.pravatar.cc/400?u=${encodeURIComponent(email)}`,
+    };
+
     try {
       const response = await authApi.register({
         name, email, password, birthday, gender, genderInterest, city, bio,
         interests: selectedInterests,
       });
+      // Backend reachable → use real token + user
       await setToken(response.token);
-      const user: User = {
-        id: response.user.id, email: response.user.email, name: response.user.name,
-        profileComplete: false, age: response.user.age, city: response.user.city,
-        bio: response.user.bio, interests: response.user.interests, gender: response.user.gender,
-        genderInterest: response.user.genderInterest, photoUrl: response.user.photoUrl,
-      };
-      setUser(user);
+      setUser({
+        id: response.user.id,
+        email: response.user.email,
+        name: response.user.name,
+        profileComplete: true,
+        age: response.user.age ?? age,
+        birthday,
+        city: response.user.city ?? city,
+        bio: response.user.bio ?? bio,
+        interests: response.user.interests ?? selectedInterests,
+        gender: response.user.gender ?? gender.toLowerCase(),
+        genderInterest: response.user.genderInterest ?? genderInterest.toLowerCase(),
+        photoUrl: response.user.photoUrl ?? localUser.photoUrl,
+      });
       router.replace('/');
+      return;
     } catch (error: any) {
-      Alert.alert('Registration Failed', error.response?.data?.message || 'An error occurred during registration');
+      // Distinguish between "server not running" (network error) and
+      // "server said no" (validation/conflict). Only fall back for the former.
+      const status = error?.response?.status;
+      const isNetworkError = !error?.response;
+      const isServerUnavailable = status === 502 || status === 503 || status === 504;
+
+      if (isNetworkError || isServerUnavailable) {
+        // Local-only fallback so the app is usable without the backend
+        await setToken(`local-${localUser.id}`);
+        setUser(localUser);
+        router.replace('/');
+        return;
+      }
+
+      Alert.alert(
+        'Registration failed',
+        error?.response?.data?.message || 'Something went wrong. Please try again.',
+      );
     } finally {
       setLoading(false);
     }
