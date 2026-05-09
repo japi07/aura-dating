@@ -6,8 +6,10 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LONDON_VENUES, randomVenue, type Venue } from '@/constants/london';
 
-const STORAGE_KEY_PROPOSALS = 'aura.proposals.v1';
-const STORAGE_KEY_DECISIONS = 'aura.decisions.v1';
+// v2 — bumped when we made videoUrl required so old cached proposals
+// (without videoUrl) are wiped on next hydrate.
+const STORAGE_KEY_PROPOSALS = 'aura.proposals.v2';
+const STORAGE_KEY_DECISIONS = 'aura.decisions.v2';
 
 export interface ProposalUser {
   id: string;
@@ -215,10 +217,12 @@ export const useProposalsStore = create<ProposalsState>((set, get) => ({
       const decisions: Record<string, DecisionRecord> = decRaw ? JSON.parse(decRaw) : {};
       set({ proposals, decisions, isHydrated: true });
 
-      // If we have no fresh proposals (or they're stale), pull new ones
+      // Refresh if: no fresh proposals today OR any cached proposal is missing
+      // a video (data shape changed and the cache is stale)
       const today = new Date().toDateString();
       const haveFreshToday = proposals.some(p => new Date(p.createdAt).toDateString() === today);
-      if (!haveFreshToday) {
+      const allHaveVideo = proposals.every(p => !!p.videoUrl);
+      if (!haveFreshToday || !allHaveVideo) {
         await get().refreshProposals();
       }
     } catch (e: any) {

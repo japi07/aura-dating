@@ -236,12 +236,24 @@ export default function TodayScreen() {
                 </View>
 
                 {/* Video message — mandatory for every proposal */}
-                <VideoMessage
-                  videoUrl={proposal.videoUrl}
-                  poster={proposal.videoPoster}
-                  durationSec={proposal.videoDurationSec}
-                  fromName={proposal.from.name}
-                />
+                {proposal.videoUrl ? (
+                  <VideoMessage
+                    videoUrl={proposal.videoUrl}
+                    poster={proposal.videoPoster}
+                    durationSec={proposal.videoDurationSec}
+                    fromName={proposal.from.name}
+                  />
+                ) : (
+                  <View style={{
+                    padding: 16, marginBottom: 18, borderRadius: 16,
+                    backgroundColor: COLORS.WARNING_LIGHT, flexDirection: 'row', gap: 10, alignItems: 'center',
+                  }}>
+                    <Ionicons name="videocam-off-outline" size={20} color={COLORS.WARNING} />
+                    <Text style={{ flex: 1, fontSize: 13, color: COLORS.TEXT_SECONDARY }}>
+                      Video unavailable. Pull down to refresh.
+                    </Text>
+                  </View>
+                )}
 
                 {/* Caption (his written message accompanying the video) */}
                 <View style={styles.captionCard}>
