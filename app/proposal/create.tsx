@@ -10,6 +10,9 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { COLORS } from '@/constants/colors';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
+import { useAuthStore } from '@/store/auth';
+import { useProposalsStore } from '@/store/proposals';
+import { LONDON_VENUES } from '@/constants/london';
 
 const DATE_TYPES = [
   { key: 'Dinner', emoji: '🍽️', label: 'Dress-up Dinner' },
@@ -26,10 +29,13 @@ const PAYMENT_OPTIONS = [
 
 export default function CreateProposalScreen() {
   const router = useRouter();
-  const { userId, userName } = useLocalSearchParams();
+  const params = useLocalSearchParams<{ recipientEmail?: string }>();
+  const { user } = useAuthStore();
+  const { sendProposal } = useProposalsStore();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const [recipientEmail, setRecipientEmail] = useState((params.recipientEmail as string) || '');
   const [message, setMessage] = useState('');
   const [dateType, setDateType] = useState('');
   const [venue, setVenue] = useState('');
@@ -82,10 +88,14 @@ export default function CreateProposalScreen() {
 
   const validateForm = () => {
     const e: Record<string, string> = {};
+    if (!recipientEmail.trim()) e.recipientEmail = 'Who is this proposal for?';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) e.recipientEmail = 'Please enter a valid email';
+    else if (recipientEmail.toLowerCase().trim() === user?.email?.toLowerCase()) e.recipientEmail = 'You can\'t propose to yourself';
     if (!videoUri) e.video = 'A video introduction is required for every proposal';
     if (!message.trim()) e.message = 'Please write a short caption to go with your video';
     else if (message.length < 10) e.message = 'At least 10 characters';
     if (!dateType) e.dateType = 'Select a date type';
+    if (!venue.trim()) e.venue = 'Tell her where you\'re taking her';
     if (!preferredDate.trim()) e.preferredDate = 'Date is required';
     if (!preferredTime.trim()) e.preferredTime = 'Time is required';
     if (!paymentArrangement) e.paymentArrangement = 'Select a payment option';
@@ -93,16 +103,100 @@ export default function CreateProposalScreen() {
     return Object.keys(e).length === 0;
   };
 
+  /** Try to parse the typed date+time into a real ISO datetime */
+  const parseStartsAt = (): string => {
+    const dStr = preferredDate.trim();
+    // dd/mm/yyyy or yyyy-mm-dd
+    const ddmmyyyy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(dStr);
+    let d: Date;
+    if (ddmmyyyy) {
+      d = new Date(`${ddmmyyyy[3]}-${ddmmyyyy[2].padStart(2, '0')}-${ddmmyyyy[1].padStart(2, '0')}`);
+    } else {
+      d = new Date(dStr);
+    }
+    if (isNaN(d.getTime())) d = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+    // Time: "7:30 PM" / "19:30" / "19:30:00"
+    const t = preferredTime.trim();
+    const ampm = /^(\d{1,2}):?(\d{2})?\s*(am|pm)$/i.exec(t);
+    if (ampm) {
+      let h = parseInt(ampm[1], 10);
+      const m = ampm[2] ? parseInt(ampm[2], 10) : 0;
+      if (/pm/i.test(ampm[3]) && h < 12) h += 12;
+      if (/am/i.test(ampm[3]) && h === 12) h = 0;
+      d.setHours(h, m, 0, 0);
+    } else {
+      const hm = /^(\d{1,2}):(\d{2})/.exec(t);
+      if (hm) d.setHours(parseInt(hm[1], 10), parseInt(hm[2], 10), 0, 0);
+    }
+    return d.toISOString();
+  };
+
+  /** Map UI date type to a venue category, then resolve a real London venue */
+  const resolveVenue = () => {
+    const cat: any = dateType === 'Dinner' ? 'dinner'
+      : dateType === 'Coffee' ? 'coffee'
+      : dateType === 'Nature' ? 'walk'
+      : 'gallery';
+    // If user typed an exact venue name we have, use it; otherwise pick first in category
+    const lcVenue = venue.trim().toLowerCase();
+    const exact = LONDON_VENUES.find(v => v.name.toLowerCase() === lcVenue);
+    if (exact) return exact;
+    // Otherwise return a "free-form" venue using the user's typed value
+    return {
+      id: `custom_${Date.now()}`,
+      name: venue.trim(),
+      category: cat,
+      emoji: dateType === 'Dinner' ? '🍽️' : dateType === 'Coffee' ? '☕' : dateType === 'Nature' ? '🌿' : '🎨',
+      area: 'London',
+      address: venue.trim(),
+      postcode: '',
+      tube: '',
+      priceRange: '££' as const,
+      lat: 51.5074,
+      lng: -0.1278,
+    };
+  };
+
+  const paymentToEnum = (): 'he-pays' | 'split' | 'she-pays' => {
+    if (paymentArrangement === 'I\'ll Pay') return 'he-pays';
+    if (paymentArrangement === 'They\'ll Pay') return 'she-pays';
+    return 'split';
+  };
+
   const handleSend = async () => {
     if (!validateForm()) return;
     setLoading(true);
     try {
-      // Simulate network delay so the loading state is visible
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      const resolvedVenue = resolveVenue();
+
+      await sendProposal({
+        from: {
+          id: user?.id || `user_${Date.now()}`,
+          name: user?.name || 'Anonymous',
+          age: user?.age || 0,
+          area: user?.city?.split(',')[0]?.trim() || 'London',
+          job: '',
+          photoUrl: user?.photoUrl || `https://i.pravatar.cc/400?u=${encodeURIComponent(user?.email || 'anon')}`,
+          verified: !!user?.verified,
+          lat: 51.5074,
+          lng: -0.1278,
+          email: user?.email,
+        },
+        recipientEmail: recipientEmail.trim().toLowerCase(),
+        matchScore: 90,
+        matchReason: 'Sent directly to you',
+        venue: resolvedVenue as any,
+        startsAt: parseStartsAt(),
+        payment: paymentToEnum(),
+        message: message.trim(),
+        videoUrl: videoUri!,
+        videoPoster: undefined,
+        videoDurationSec: videoDuration ?? undefined,
+      });
 
       Alert.alert(
         '✨ Proposal sent',
-        `Your video and date plan have been delivered to ${userName}. They have 24 hours to accept or pass.\n\nYou'll be notified the moment they decide.`,
+        `Your video and date plan have been delivered to ${recipientEmail}. They have 24 hours to accept or pass.`,
         [{ text: 'Done', onPress: () => router.back() }],
       );
     } catch (error: any) {
@@ -124,15 +218,22 @@ export default function CreateProposalScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Recipient Banner */}
-        <View style={styles.banner}>
-          <View style={styles.bannerIcon}>
-            <Ionicons name="heart" size={16} color={COLORS.PRIMARY} />
-          </View>
-          <View>
-            <Text style={styles.bannerLbl}>Proposing to</Text>
-            <Text style={styles.bannerName}>{userName}</Text>
-          </View>
+        {/* Recipient — type the email of the woman you're proposing to */}
+        <View style={styles.card}>
+          <Text style={styles.sectionLbl}>To</Text>
+          <Input
+            label="Recipient email"
+            placeholder="her@email.com"
+            value={recipientEmail}
+            onChangeText={setRecipientEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            error={errors.recipientEmail}
+            icon="mail-outline"
+          />
+          <Text style={styles.hintText}>
+            She'll see your video proposal in her Today tab. Make sure the email is exactly the one she used to sign up.
+          </Text>
         </View>
 
         {/* Mandatory video introduction — sits first because every proposal needs it */}
@@ -299,6 +400,7 @@ const styles = StyleSheet.create({
     shadowColor: '#1A1A2E', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2,
   },
   sectionLbl: { fontSize: 10, fontWeight: '800', color: COLORS.TEXT_MUTED, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 },
+  hintText: { fontSize: 11, color: COLORS.TEXT_MUTED, lineHeight: 16, marginTop: 4 },
   row: { flexDirection: 'row', gap: 10 },
 
   typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },

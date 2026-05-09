@@ -22,6 +22,8 @@ export interface ProposalUser {
   verified: boolean;
   lat: number;
   lng: number;
+  /** Sender's email — used to track who sent what for the local routing model */
+  email?: string;
 }
 
 export interface Proposal {
@@ -29,6 +31,8 @@ export interface Proposal {
   createdAt: string; // ISO
   expiresAt: string; // ISO
   from: ProposalUser;
+  /** Email of the recipient — used to route proposals between local accounts */
+  recipientEmail: string;
   matchScore: number;
   matchReason: string;
   venue: Venue;
@@ -60,9 +64,14 @@ interface ProposalsState {
 
   hydrate: () => Promise<void>;
   refreshProposals: () => Promise<void>;
+  /** Persist a new outgoing proposal — visible to its recipient on this device */
+  sendProposal: (p: Omit<Proposal, 'id' | 'createdAt' | 'expiresAt'>) => Promise<Proposal>;
   acceptProposal: (id: string) => Promise<Proposal | null>;
   declineProposal: (id: string) => Promise<void>;
-  pendingForToday: () => Proposal[];
+  /** Pending proposals received by the given email (the current user) */
+  pendingForUser: (email: string) => Proposal[];
+  /** Proposals sent by the given email (so the sender can see what's out) */
+  sentByUser: (email: string) => Proposal[];
 }
 
 /* ─── store ─── */
@@ -101,14 +110,24 @@ export const useProposalsStore = create<ProposalsState>((set, get) => ({
   refreshProposals: async () => {
     set({ isLoading: true, error: null });
     try {
-      // TODO: replace with real API call when the backend is ready:
-      //   const { proposals: fresh } = await proposalsApi.getProposals();
-      //   set({ proposals: fresh, isLoading: false });
-      //   await AsyncStorage.setItem(STORAGE_KEY_PROPOSALS, JSON.stringify(fresh));
+      // Real backend would re-fetch here; locally we just clear the loading flag
       set({ isLoading: false });
     } catch (e: any) {
       set({ isLoading: false, error: e?.message || 'Could not refresh' });
     }
+  },
+
+  sendProposal: async (data) => {
+    const proposal: Proposal = {
+      ...data,
+      id: `prop_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    };
+    const next = [proposal, ...get().proposals];
+    set({ proposals: next });
+    await AsyncStorage.setItem(STORAGE_KEY_PROPOSALS, JSON.stringify(next));
+    return proposal;
   },
 
   acceptProposal: async (id: string) => {
@@ -132,8 +151,18 @@ export const useProposalsStore = create<ProposalsState>((set, get) => ({
     await AsyncStorage.setItem(STORAGE_KEY_DECISIONS, JSON.stringify(decisions));
   },
 
-  pendingForToday: () => {
+  pendingForUser: (email: string) => {
     const { proposals, decisions } = get();
-    return proposals.filter(p => !decisions[p.id]);
+    const lc = email.toLowerCase().trim();
+    return proposals
+      .filter(p => p.recipientEmail.toLowerCase() === lc && !decisions[p.id])
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  },
+
+  sentByUser: (email: string) => {
+    const lc = email.toLowerCase().trim();
+    return get().proposals
+      .filter(p => p.from.email?.toLowerCase() === lc)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   },
 }));

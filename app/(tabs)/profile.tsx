@@ -44,6 +44,7 @@ export default function ProfileScreen() {
   const completionPct = isVerified ? 100 : 78;
 
   const settings = [
+    { icon: 'videocam-outline', label: 'Send a date proposal', desc: 'Record a video and send it by email', color: COLORS.BRAND, route: '/proposal/create' },
     { icon: 'options-outline', label: 'Date preferences', desc: 'Types, days, distance, age range', color: '#FF9F43', route: '/settings/preferences' },
     { icon: 'notifications-outline', label: 'Notifications', desc: 'Manage all alerts', color: '#FF6B81', route: '/settings/notifications' },
     { icon: 'eye-outline', label: 'Privacy', desc: 'Visibility & data', color: '#2B9FFF', route: '/settings/privacy' },

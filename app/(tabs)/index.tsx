@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { COLORS } from '@/constants/colors';
 import { VideoMessage } from '@/components/VideoMessage';
 import { useAuthStore } from '@/store/auth';
@@ -23,10 +24,11 @@ import {
 const { width: SW } = Dimensions.get('window');
 
 export default function TodayScreen() {
+  const router = useRouter();
   const { user } = useAuthStore();
   const {
     isHydrated, error, hydrate, refreshProposals,
-    pendingForToday, acceptProposal, declineProposal, decisions,
+    pendingForUser, acceptProposal, declineProposal, decisions,
   } = useProposalsStore();
   const { addDate, hydrate: hydrateDates } = useDatesStore();
   const [refreshing, setRefreshing] = useState(false);
@@ -54,9 +56,9 @@ export default function TodayScreen() {
     }
   }, [isHydrated]);
 
-  const firstName = (user?.name || 'Sarah').split(' ')[0];
-  const proposals = pendingForToday();
-  const proposal = proposals[0]; // Just one curated proposal per day
+  const firstName = (user?.name || 'there').split(' ')[0];
+  const proposals = user?.email ? pendingForUser(user.email) : [];
+  const proposal = proposals[0]; // Show one at a time — quality over quantity
   const reviewedToday = !proposal && Object.keys(decisions).length > 0;
 
   const onRefresh = async () => {
@@ -300,7 +302,7 @@ export default function TodayScreen() {
             </Animated.View>
           )}
 
-          {/* All reviewed — beautiful next-up state */}
+          {/* No pending proposal */}
           {isHydrated && !proposal && (
             <Animated.View style={[{ opacity: fade, transform: [{ translateY: lift }] }]}>
               <View style={styles.doneCard}>
@@ -309,40 +311,43 @@ export default function TodayScreen() {
                   style={StyleSheet.absoluteFillObject}
                 />
                 <View style={styles.doneSparkle}>
-                  <Ionicons name="moon" size={36} color={COLORS.BRAND} />
+                  <Ionicons name={reviewedToday ? 'moon' : 'mail-open-outline'} size={36} color={COLORS.BRAND} />
                 </View>
                 <Text style={styles.doneTitle}>
-                  {reviewedToday ? "Until tomorrow" : "Resting today"}
+                  {reviewedToday ? 'Until tomorrow' : 'No proposals yet'}
                 </Text>
                 <Text style={styles.doneSub}>
-                  Your next curated proposal will arrive in
+                  {reviewedToday
+                    ? 'Your next curated proposal will arrive in'
+                    : 'When a verified man sends you a proposal,\nit will appear here.'}
                 </Text>
-                <View style={styles.countdownBig}>
-                  <Text style={styles.countdownNum}>{hoursUntilTomorrow()}</Text>
-                  <Text style={styles.countdownLabel}>hours</Text>
-                </View>
+                {reviewedToday && (
+                  <View style={styles.countdownBig}>
+                    <Text style={styles.countdownNum}>{hoursUntilTomorrow()}</Text>
+                    <Text style={styles.countdownLabel}>hours</Text>
+                  </View>
+                )}
                 <View style={styles.philosophyChip}>
                   <Ionicons name="sparkles" size={12} color={COLORS.GOLD} />
                   <Text style={styles.philosophyText}>Quality over quantity</Text>
                 </View>
               </View>
 
-              {/* Mini "what's next" preview */}
-              <View style={styles.tomorrowPreview}>
-                <Text style={styles.tomorrowLabel}>WHAT TO EXPECT</Text>
-                <View style={styles.expectRow}>
-                  <View style={styles.expectIcon}><Ionicons name="alarm-outline" size={16} color={COLORS.BRAND} /></View>
-                  <Text style={styles.expectText}>9:00 AM — your proposal arrives</Text>
+              {/* Send a proposal CTA — entry point to the composer */}
+              <TouchableOpacity
+                style={styles.sendCta}
+                onPress={() => router.push('/proposal/create')}
+                activeOpacity={0.85}
+              >
+                <View style={styles.sendCtaIcon}>
+                  <Ionicons name="videocam" size={20} color="#fff" />
                 </View>
-                <View style={styles.expectRow}>
-                  <View style={styles.expectIcon}><Ionicons name="hand-left-outline" size={16} color={COLORS.BRAND} /></View>
-                  <Text style={styles.expectText}>Hand-picked from London matchmakers</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sendCtaTitle}>Send a date proposal</Text>
+                  <Text style={styles.sendCtaSub}>Record your video, pick the venue, send it to her email</Text>
                 </View>
-                <View style={styles.expectRow}>
-                  <View style={styles.expectIcon}><Ionicons name="cafe-outline" size={16} color={COLORS.BRAND} /></View>
-                  <Text style={styles.expectText}>Real venue, real time, real intentions</Text>
-                </View>
-              </View>
+                <Ionicons name="chevron-forward" size={18} color={COLORS.BRAND} />
+              </TouchableOpacity>
             </Animated.View>
           )}
 
@@ -548,6 +553,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   expectText: { fontSize: 14, color: COLORS.TEXT, fontWeight: '500', flex: 1 },
+
+  sendCta: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    marginHorizontal: 16, marginTop: 14, padding: 18, borderRadius: 22,
+    backgroundColor: COLORS.SURFACE,
+    borderWidth: 1.5, borderColor: COLORS.BRAND_MUTED,
+    shadowColor: '#1A0F26', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 4,
+  },
+  sendCtaIcon: {
+    width: 44, height: 44, borderRadius: 14, backgroundColor: COLORS.BRAND,
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: COLORS.BRAND, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4,
+  },
+  sendCtaTitle: { fontSize: 15, fontWeight: '800', color: COLORS.TEXT, marginBottom: 3 },
+  sendCtaSub: { fontSize: 12, color: COLORS.TEXT_MUTED, lineHeight: 16 },
 
   /* Pillars footer */
   pillarsFooter: { paddingTop: 28, paddingBottom: 8, gap: 8, alignItems: 'center' },
