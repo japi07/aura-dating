@@ -30,72 +30,10 @@ interface LondonEvent {
   lng: number;
 }
 
-// Real London-flavoured group events curated by Aura
-const LONDON_EVENTS: LondonEvent[] = [
-  {
-    id: 'e1',
-    title: 'Natural Wine Tasting',
-    date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-    venue: 'P. Franco', area: 'Clapton', address: '107 Lower Clapton Rd', postcode: 'E5 0NP', tube: 'Hackney Downs',
-    type: 'Social', spotsAvailable: 3, totalSpots: 12, emoji: '🍷', price: '£35',
-    description: 'Six low-intervention wines, small plates, hosted by the in-house sommelier.',
-    featured: true, lat: 51.5586, lng: -0.0518,
-  },
-  {
-    id: 'e2',
-    title: 'Sunset Walk: Hampstead Heath',
-    date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-    venue: 'Parliament Hill', area: 'Hampstead', address: 'Hampstead Heath', postcode: 'NW3 1TH', tube: 'Hampstead',
-    type: 'Activity', spotsAvailable: 5, totalSpots: 15, emoji: '🌅', price: 'Free',
-    description: 'Group walk to Parliament Hill for golden hour. Bring a flask of something warm.',
-    lat: 51.5608, lng: -0.1640,
-  },
-  {
-    id: 'e3',
-    title: 'Late at Tate Modern',
-    date: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
-    venue: 'Tate Modern', area: 'Bankside', address: 'Bankside', postcode: 'SE1 9TG', tube: 'Blackfriars',
-    type: 'Culture', spotsAvailable: 8, totalSpots: 20, emoji: '🎨', price: '£18',
-    description: 'After-hours private tour of the Yoko Ono retrospective + drinks at the members\' bar.',
-    lat: 51.5076, lng: -0.0994,
-  },
-  {
-    id: 'e4',
-    title: 'Pasta-making at Padella',
-    date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-    venue: 'Padella', area: 'Borough', address: '6 Southwark St', postcode: 'SE1 1TQ', tube: 'London Bridge',
-    type: 'Workshop', spotsAvailable: 2, totalSpots: 10, emoji: '🍝', price: '£75',
-    description: 'Hands-on pappardelle workshop with the head chef. Apron + glass of wine included.',
-    lat: 51.5051, lng: -0.0895,
-  },
-  {
-    id: 'e5',
-    title: 'Sunday Brunch · Granger',
-    date: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
-    venue: 'Granger & Co', area: 'Notting Hill', address: '175 Westbourne Grove', postcode: 'W11 2SB', tube: 'Notting Hill Gate',
-    type: 'Social', spotsAvailable: 4, totalSpots: 8, emoji: '🥑', price: '£28',
-    description: 'Aussie-style brunch + a wander through Portobello Road market afterwards.',
-    lat: 51.5151, lng: -0.1989,
-  },
-  {
-    id: 'e6',
-    title: 'Pottery Wheel Workshop',
-    date: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),
-    venue: 'Turning Earth', area: 'Hoxton', address: '11-15 Argall Way', postcode: 'E10 7QF', tube: 'Leyton',
-    type: 'Workshop', spotsAvailable: 6, totalSpots: 14, emoji: '🏺', price: '£60',
-    description: 'Two-hour beginners\' wheel session. Take home what you make.',
-    lat: 51.5654, lng: -0.0091,
-  },
-  {
-    id: 'e7',
-    title: 'Supper Club · Persian Feast',
-    date: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
-    venue: 'Berber & Q', area: 'Haggerston', address: '338 Acton Mews', postcode: 'E8 4EA', tube: 'Haggerston',
-    type: 'Dinner', spotsAvailable: 3, totalSpots: 8, emoji: '🥘', price: '£55',
-    description: 'Eight-person communal table, four-course Persian menu, natural wine pairings.',
-    lat: 51.5396, lng: -0.0747,
-  },
-];
+// Events are pulled from the backend by the operations team. Until the
+// backend is wired up, this list stays empty so users see a real empty state.
+// Replace this with a fetch from the events API when ready.
+const LONDON_EVENTS: LondonEvent[] = [];
 
 const TYPE_CONFIG: Record<string, { bg: string; text: string; icon: string }> = {
   Social:   { bg: COLORS.INFO_LIGHT,    text: COLORS.INFO,    icon: 'people-outline' },
@@ -190,6 +128,17 @@ export default function EventsScreen() {
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.BRAND} />}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <View style={styles.emptyIcon}>
+              <Ionicons name="calendar-outline" size={42} color={COLORS.BRAND} />
+            </View>
+            <Text style={styles.emptyTitle}>No events yet</Text>
+            <Text style={styles.emptySub}>
+              We're curating new London experiences right now. You'll be the first to know when one opens up near you.
+            </Text>
+          </View>
+        }
         ListHeaderComponent={
           category === 'All' && featured ? (
             <View style={styles.featuredCard}>
@@ -362,4 +311,12 @@ const styles = StyleSheet.create({
   progressTrack: { flex: 1, height: 4, backgroundColor: COLORS.BORDER_LIGHT, borderRadius: 2, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 2 },
   progressLabel: { fontSize: 11, fontWeight: '700', color: COLORS.TEXT_MUTED, textAlign: 'right' },
+
+  empty: { alignItems: 'center', paddingTop: 48, paddingHorizontal: 32 },
+  emptyIcon: {
+    width: 80, height: 80, borderRadius: 26, backgroundColor: COLORS.BRAND_MUTED,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 18,
+  },
+  emptyTitle: { fontSize: 19, fontWeight: '800', color: COLORS.TEXT, marginBottom: 8, textAlign: 'center' },
+  emptySub: { fontSize: 14, color: COLORS.TEXT_MUTED, textAlign: 'center', lineHeight: 21 },
 });

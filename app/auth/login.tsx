@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, KeyboardAvoidingView,
-  Platform, Alert, Dimensions, TouchableOpacity, Image,
+  Platform, Alert, Dimensions, TouchableOpacity,
   TextInput, StatusBar,
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
@@ -12,14 +12,6 @@ import { COLORS } from '@/constants/colors';
 
 const { height: SH, width: SW } = Dimensions.get('window');
 
-const HERO_AVATARS = [
-  'https://i.pravatar.cc/120?img=47',
-  'https://i.pravatar.cc/120?img=48',
-  'https://i.pravatar.cc/120?img=49',
-  'https://i.pravatar.cc/120?img=25',
-  'https://i.pravatar.cc/120?img=26',
-  'https://i.pravatar.cc/120?img=50',
-];
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -77,38 +69,12 @@ export default function LoginScreen() {
     }
   };
 
-  const handleDemo = async () => {
-    await setToken('demo-token-12345');
-    setUser({ id: 'demo-user-1', email: 'demo@aura.com', name: 'Sarah', profileComplete: true, age: 27, city: 'Shoreditch, London', bio: 'Marketing director, always hunting hidden cafés in east London. Looking for someone who can keep up on a Sunday market wander.', interests: ['Art', 'Coffee', 'Travel', 'Cooking', 'Theatre'], gender: 'female', genderInterest: 'male', photoUrl: 'https://i.pravatar.cc/400?img=47' });
-    router.replace('/');
-  };
-
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.root}>
       <StatusBar barStyle="light-content" />
 
       {/* Hero section */}
       <View style={styles.hero}>
-        {/* Floating avatar grid */}
-        <View style={styles.avatarGrid}>
-          {HERO_AVATARS.map((uri, i) => (
-            <View
-              key={i}
-              style={[
-                styles.avatarWrap,
-                { transform: [{ rotate: `${(i % 2 === 0 ? -1 : 1) * (4 + i * 2)}deg` }] },
-              ]}
-            >
-              <Image source={{ uri }} style={styles.avatarImg} />
-              {i === 0 && <View style={styles.avatarRing} />}
-            </View>
-          ))}
-        </View>
-
-        {/* Overlay gradient */}
-        <View style={styles.heroOverlay} />
-
-        {/* Logo + tagline */}
         <View style={styles.heroContent}>
           <View style={styles.logoRow}>
             <Ionicons name="flame" size={36} color="#fff" />
@@ -184,19 +150,6 @@ export default function LoginScreen() {
               <Ionicons name="arrow-forward" size={18} color="#fff" />
             </>
           )}
-        </TouchableOpacity>
-
-        {/* Divider */}
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        {/* Demo button */}
-        <TouchableOpacity style={styles.demoBtn} onPress={handleDemo} activeOpacity={0.85}>
-          <Ionicons name="sparkles-outline" size={18} color={COLORS.BRAND} />
-          <Text style={styles.demoBtnText}>Try Demo Mode</Text>
         </TouchableOpacity>
 
         {/* Register link */}

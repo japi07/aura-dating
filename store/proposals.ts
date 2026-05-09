@@ -1,10 +1,11 @@
 /**
- * Proposals store — persists per-day proposals, accept/decline state.
+ * Proposals store — persists per-day proposals received from the matchmaking
+ * backend, plus the user's accept/decline state.
  * Backed by AsyncStorage so user state survives app restarts.
  */
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LONDON_VENUES, randomVenue, type Venue } from '@/constants/london';
+import type { Venue } from '@/constants/london';
 
 // v2 — bumped when we made videoUrl required so old cached proposals
 // (without videoUrl) are wiped on next hydrate.
@@ -64,140 +65,6 @@ interface ProposalsState {
   pendingForToday: () => Proposal[];
 }
 
-/* ─── seed generators ─── */
-
-const FIRST_NAMES = ['James', 'Oliver', 'Henry', 'Edward', 'Thomas', 'Charlie', 'Hugo', 'Theo', 'Felix', 'Jack', 'Alex', 'Daniel', 'Marcus', 'Arthur', 'Benjamin'];
-const SURNAMES = ['Whitfield', 'Hamilton', 'Carter', 'Bennett', 'Spencer', 'Ashford', 'Lawson', 'Holmes', 'Davies', 'Pearce'];
-const JOBS = ['Architect', 'Curator at Tate', 'Software engineer', 'Barrister', 'Strategy consultant', 'Chef at Brat', 'Wine importer', 'NHS doctor', 'Documentary editor', 'Investment manager', 'Producer at the BBC', 'Furniture designer'];
-const REASONS = [
-  'You both prioritise culture and meaningful conversation',
-  'Same love for hidden cafés and weekend markets',
-  'Both of you mentioned wanting someone you can plan trips with',
-  'Strong overlap on art, food and not-too-late nights',
-  'You both said you want a serious relationship — not just dating',
-  'Similar humour, similar pace of life',
-];
-const PAYMENTS: Proposal['payment'][] = ['he-pays', 'split', 'he-pays', 'split', 'he-pays'];
-
-const SAMPLE_MESSAGES_BY_CATEGORY: Record<Venue['category'], string[]> = {
-  dinner: [
-    'I\'ve been wanting to take someone to {venue} for ages — booking is hard but I got us a table. Just good food, slow pace, no rush.',
-    'I\'d love to take you to {venue}. Their food does the talking, so we don\'t have to fill silence with small talk.',
-  ],
-  lunch: [
-    'Saturday lunch at {venue}? Easy first-date energy — relaxed, daylight, no pressure.',
-  ],
-  coffee: [
-    'No-pressure coffee at {venue}. If we vibe, we wander to the {area} galleries. If not, no awkward 3-hour dinner.',
-    'Coffee at {venue} — they roast their own beans and the tables are big enough for a proper conversation.',
-  ],
-  drinks: [
-    'Cocktails at {venue} — I think you\'d like the vibe. One drink, see how it goes.',
-  ],
-  walk: [
-    'A wander around {venue} on Sunday morning. I\'ll bring takeaway flat whites. Honest, easy, hopefully sunny.',
-    'Walk through {venue} — apparently the cherry blossoms are peaking. Felt like a properly unhurried way to meet.',
-  ],
-  gallery: [
-    'There\'s an exhibition at {venue} I\'ve been meaning to see. Walk through it, then a coffee nearby?',
-  ],
-  cooking: [
-    'A pasta-making class at {venue} — proper hands-on, half terrible, half hilarious. Way better than awkward dinner.',
-  ],
-  concert: [
-    'Live music at {venue} — intimate venue, decent seats, drinks beforehand if you fancy.',
-  ],
-  workshop: [
-    'Pottery at {venue}. We make ridiculous bowls, drink wine, and you learn very quickly if I\'m fun under pressure.',
-  ],
-  sport: [
-    'Cycle through {area} on Sunday morning. London Fields → Victoria Park → coffee somewhere good.',
-  ],
-};
-
-function isoFutureDayHour(daysAhead: number, hour: number) {
-  const d = new Date();
-  d.setDate(d.getDate() + daysAhead);
-  d.setHours(hour, 0, 0, 0);
-  return d.toISOString();
-}
-
-function pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
-
-/**
- * Build today's curated proposal. Quality > quantity — one carefully-chosen
- * match per day. Same proposal stays stable for the day (deterministic by date).
- */
-// Public sample videos used for demo proposals (in production these would
-// be uploaded clips from each proposer, stored in our CDN)
-const DEMO_VIDEOS = [
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4',
-];
-
-function buildSeedProposals(): Proposal[] {
-  // Pool of beautifully-curated London proposals; we'll rotate one per day
-  const candidates: Array<{ venueId: string; photoIdx: number; videoIdx: number }> = [
-    { venueId: 'v_padella',     photoIdx: 11, videoIdx: 0 },
-    { venueId: 'v_monmouth',    photoIdx: 13, videoIdx: 1 },
-    { venueId: 'v_tate_modern', photoIdx: 15, videoIdx: 2 },
-    { venueId: 'v_dishoom_sho', photoIdx: 17, videoIdx: 3 },
-    { venueId: 'v_lyaness',     photoIdx: 18, videoIdx: 4 },
-    { venueId: 'v_hampstead',   photoIdx: 20, videoIdx: 5 },
-    { venueId: 'v_columbia',    photoIdx: 22, videoIdx: 6 },
-  ];
-  // Use day-of-year as a stable seed so the proposal doesn't change mid-day
-  const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
-  const choice = candidates[dayOfYear % candidates.length];
-  const venue = LONDON_VENUES.find(v => v.id === choice.venueId)!;
-
-  const name = pick(FIRST_NAMES);
-  const age = 28 + Math.floor(Math.random() * 7);
-  const messageTpl = pick(SAMPLE_MESSAGES_BY_CATEGORY[venue.category] || ['I\'d love to take you to {venue}.']);
-  const message = messageTpl.replace('{venue}', venue.name).replace('{area}', venue.area);
-
-  // Pick a thoughtful date/time depending on category
-  let startsAt: string;
-  if (venue.category === 'coffee' || venue.category === 'walk' || venue.category === 'gallery') {
-    startsAt = isoFutureDayHour(2, 11); // weekend morning
-  } else if (venue.category === 'drinks') {
-    startsAt = isoFutureDayHour(2, 19);
-  } else {
-    startsAt = isoFutureDayHour(2, 19); // dinner-ish
-  }
-
-  return [{
-    id: `prop_${dayOfYear}`,
-    createdAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    from: {
-      id: `usr_today`,
-      name,
-      age,
-      area: pick(['Shoreditch', 'Notting Hill', 'Hampstead', 'Chelsea', 'Islington', 'Marylebone']),
-      job: pick(JOBS),
-      photoUrl: `https://i.pravatar.cc/600?img=${choice.photoIdx}`,
-      verified: true,
-      lat: 51.5 + (Math.random() - 0.5) * 0.05,
-      lng: -0.12 + (Math.random() - 0.5) * 0.05,
-    },
-    matchScore: 89 + Math.floor(Math.random() * 9),
-    matchReason: pick(REASONS),
-    venue,
-    startsAt,
-    payment: pick(PAYMENTS),
-    message,
-    videoUrl: DEMO_VIDEOS[choice.videoIdx % DEMO_VIDEOS.length],
-    videoPoster: `https://i.pravatar.cc/800?img=${choice.photoIdx}`,
-    videoDurationSec: 15,
-  }];
-}
-
 /* ─── store ─── */
 
 export const useProposalsStore = create<ProposalsState>((set, get) => ({
@@ -215,28 +82,30 @@ export const useProposalsStore = create<ProposalsState>((set, get) => ({
       ]);
       const proposals: Proposal[] = propRaw ? JSON.parse(propRaw) : [];
       const decisions: Record<string, DecisionRecord> = decRaw ? JSON.parse(decRaw) : {};
-      set({ proposals, decisions, isHydrated: true });
 
-      // Refresh if: no fresh proposals today OR any cached proposal is missing
-      // a video (data shape changed and the cache is stale)
-      const today = new Date().toDateString();
-      const haveFreshToday = proposals.some(p => new Date(p.createdAt).toDateString() === today);
-      const allHaveVideo = proposals.every(p => !!p.videoUrl);
-      if (!haveFreshToday || !allHaveVideo) {
-        await get().refreshProposals();
-      }
+      // Defensive: drop any proposals that don't have the required video field
+      // (might be left over from older app versions)
+      const valid = proposals.filter(p => !!p.videoUrl);
+      set({ proposals: valid, decisions, isHydrated: true });
     } catch (e: any) {
       set({ error: e?.message || 'Failed to load proposals', isHydrated: true });
     }
   },
 
+  /**
+   * Pulls today's proposals from the matchmaking backend.
+   * In production this calls the API; if no backend is reachable
+   * (offline / no server) the existing local list is kept and the user
+   * sees the appropriate empty / error state.
+   */
   refreshProposals: async () => {
     set({ isLoading: true, error: null });
     try {
-      // In production: const fresh = await api.getProposals();
-      const fresh = buildSeedProposals();
-      set({ proposals: fresh, isLoading: false });
-      await AsyncStorage.setItem(STORAGE_KEY_PROPOSALS, JSON.stringify(fresh));
+      // TODO: replace with real API call when the backend is ready:
+      //   const { proposals: fresh } = await proposalsApi.getProposals();
+      //   set({ proposals: fresh, isLoading: false });
+      //   await AsyncStorage.setItem(STORAGE_KEY_PROPOSALS, JSON.stringify(fresh));
+      set({ isLoading: false });
     } catch (e: any) {
       set({ isLoading: false, error: e?.message || 'Could not refresh' });
     }

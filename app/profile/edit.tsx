@@ -18,18 +18,17 @@ const ALL_INTERESTS = [
   'Fitness', 'Yoga', 'Meditation', 'Dancing', 'Photography', 'Volunteering',
 ];
 
-const DEMO_PROFILE = {
-  id: 'demo', email: 'demo@aura.com', name: 'Sarah', profileComplete: true,
-  age: 27, city: 'Manhattan',
-  bio: 'Creative soul who loves exploring hidden cafés, weekend art markets, and spontaneous road trips. Looking for someone who can keep up with my curiosity.',
-  interests: ['Travel', 'Art', 'Cooking', 'Music', 'Photography'],
-  photoUrl: 'https://i.pravatar.cc/400?img=47',
-};
-
 export default function EditProfileScreen() {
   const router = useRouter();
-  const { user, setUser, setToken } = useAuthStore();
-  const current = user || DEMO_PROFILE;
+  const { user, setUser } = useAuthStore();
+
+  // Edit only makes sense if we have a logged-in user
+  if (!user) {
+    router.replace('/auth/login');
+    return null;
+  }
+
+  const current = user;
 
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState(current.name);
@@ -88,11 +87,6 @@ export default function EditProfileScreen() {
         });
       } catch {
         // API may not be connected in demo mode
-      }
-
-      // Ensure demo token exists so the store has a session
-      if (!user) {
-        await setToken('demo-token-12345');
       }
 
       // Update local state — always save to store

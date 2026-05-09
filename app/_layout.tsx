@@ -53,26 +53,19 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: COLORS.BG },
         }}
       >
-        {isLoggedIn ? (
-          <>
-            {!profileComplete ? (
-              <Stack.Screen name="onboarding" options={{ animation: 'none' }} />
-            ) : (
-              <Stack.Screen name="(tabs)" options={{ animation: 'none' }} />
-            )}
-            <Stack.Screen name="events/[eventId]" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-            <Stack.Screen name="events/create" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-            <Stack.Screen name="proposal/create" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-            <Stack.Screen name="verify/index" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-            <Stack.Screen name="settings/notifications" options={{ animation: 'slide_from_right' }} />
-            <Stack.Screen name="settings/privacy" options={{ animation: 'slide_from_right' }} />
-            <Stack.Screen name="settings/preferences" options={{ animation: 'slide_from_right' }} />
-            <Stack.Screen name="settings/safety" options={{ animation: 'slide_from_right' }} />
-            <Stack.Screen name="settings/subscription" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-          </>
-        ) : (
-          <Stack.Screen name="auth" options={{ animation: 'none' }} />
-        )}
+        <Stack.Screen name="auth" options={{ animation: 'none', headerShown: false }} redirect={isLoggedIn} />
+        <Stack.Screen name="onboarding" options={{ animation: 'none' }} redirect={!isLoggedIn || profileComplete} />
+        <Stack.Screen name="(tabs)" options={{ animation: 'none' }} redirect={!isLoggedIn || !profileComplete} />
+        <Stack.Screen name="events/[eventId]" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="events/create" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="proposal/create" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="verify/index" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="settings/notifications" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="settings/privacy" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="settings/preferences" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="settings/safety" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="settings/subscription" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="profile/edit" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>
     </SafeAreaProvider>
   );

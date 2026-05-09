@@ -24,13 +24,14 @@ export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
   const [promptExpanded, setPromptExpanded] = useState<number | null>(null);
 
-  const profile = user || {
-    id: 'demo', email: 'demo@aura.com', name: 'Sarah', profileComplete: true,
-    age: 27, city: 'Shoreditch, London', bio: 'Marketing director, always hunting hidden cafés in east London. Looking for someone who can keep up on a Sunday market wander.',
-    interests: INTERESTS, photoUrl: 'https://i.pravatar.cc/500?img=47',
-    verified: false,
-  };
+  // If for any reason we land on Profile without a logged-in user, send them
+  // back to login. There is no demo profile any more.
+  if (!user) {
+    router.replace('/auth/login');
+    return null;
+  }
 
+  const profile = user;
   const isVerified = !!profile.verified;
 
   const handleLogout = () => {

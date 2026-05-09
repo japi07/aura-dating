@@ -82,7 +82,6 @@ export function VideoMessage({ videoUrl, poster, durationSec, fromName }: Props)
             style={StyleSheet.absoluteFillObject}
             contentFit="cover"
             nativeControls={false}
-            allowsFullscreen={false}
             allowsPictureInPicture={false}
           />
 

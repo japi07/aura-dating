@@ -16,10 +16,8 @@ const SAFETY_TIPS = [
   { icon: 'call', title: 'Have an exit plan', desc: 'Use our in-app SOS button. We can call you a ride or alert your contacts.' },
 ];
 
-const BLOCKED_USERS = [
-  { id: 'b1', name: 'Mark', age: 35, photoUrl: 'https://i.pravatar.cc/150?img=33', blockedDate: '2 weeks ago', reason: 'Inappropriate behavior' },
-  { id: 'b2', name: 'Aaron', age: 31, photoUrl: 'https://i.pravatar.cc/150?img=34', blockedDate: '1 month ago', reason: 'Pushy after no' },
-];
+// Real blocked-user list comes from the backend — empty by default.
+const BLOCKED_USERS: { id: string; name: string; age: number; photoUrl: string; blockedDate: string; reason: string }[] = [];
 
 export default function SafetyScreen() {
   const router = useRouter();
