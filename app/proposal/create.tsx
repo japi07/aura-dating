@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, KeyboardAvoidingView,
-  Platform, Alert, TouchableOpacity,
+  Platform, Alert, TouchableOpacity, Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { useAuthStore } from '@/store/auth';
 import { useProposalsStore } from '@/store/proposals';
+import { useUsersStore, type DirectoryUser } from '@/store/users';
 import { LONDON_VENUES } from '@/constants/london';
 
 const DATE_TYPES = [
@@ -32,10 +33,21 @@ export default function CreateProposalScreen() {
   const params = useLocalSearchParams<{ recipientEmail?: string }>();
   const { user } = useAuthStore();
   const { sendProposal } = useProposalsStore();
+  const { candidatesFor, hydrate: hydrateUsers, isHydrated: usersHydrated } = useUsersStore();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const [recipientEmail, setRecipientEmail] = useState((params.recipientEmail as string) || '');
+  useEffect(() => { if (!usersHydrated) hydrateUsers(); }, []);
+
+  const recipients: DirectoryUser[] = user?.email
+    ? candidatesFor(user.email, { genderInterest: user.genderInterest })
+    : [];
+
+  const [selectedRecipient, setSelectedRecipient] = useState<DirectoryUser | null>(
+    params.recipientEmail
+      ? recipients.find(r => r.email === (params.recipientEmail as string)?.toLowerCase()) ?? null
+      : null,
+  );
   const [message, setMessage] = useState('');
   const [dateType, setDateType] = useState('');
   const [venue, setVenue] = useState('');
@@ -88,9 +100,7 @@ export default function CreateProposalScreen() {
 
   const validateForm = () => {
     const e: Record<string, string> = {};
-    if (!recipientEmail.trim()) e.recipientEmail = 'Who is this proposal for?';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) e.recipientEmail = 'Please enter a valid email';
-    else if (recipientEmail.toLowerCase().trim() === user?.email?.toLowerCase()) e.recipientEmail = 'You can\'t propose to yourself';
+    if (!selectedRecipient) e.recipient = 'Pick someone to propose to';
     if (!videoUri) e.video = 'A video introduction is required for every proposal';
     if (!message.trim()) e.message = 'Please write a short caption to go with your video';
     else if (message.length < 10) e.message = 'At least 10 characters';
@@ -168,6 +178,7 @@ export default function CreateProposalScreen() {
     setLoading(true);
     try {
       const resolvedVenue = resolveVenue();
+      const r = selectedRecipient!;
 
       await sendProposal({
         from: {
@@ -182,7 +193,7 @@ export default function CreateProposalScreen() {
           lng: -0.1278,
           email: user?.email,
         },
-        recipientEmail: recipientEmail.trim().toLowerCase(),
+        recipientEmail: r.email,
         matchScore: 90,
         matchReason: 'Sent directly to you',
         venue: resolvedVenue as any,
@@ -196,7 +207,7 @@ export default function CreateProposalScreen() {
 
       Alert.alert(
         '✨ Proposal sent',
-        `Your video and date plan have been delivered to ${recipientEmail}. They have 24 hours to accept or pass.`,
+        `Your video and date plan have been delivered to ${r.name}. They have 24 hours to accept or pass.`,
         [{ text: 'Done', onPress: () => router.back() }],
       );
     } catch (error: any) {
@@ -218,22 +229,59 @@ export default function CreateProposalScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Recipient — type the email of the woman you're proposing to */}
-        <View style={styles.card}>
+        {/* Recipient — pick from the people who have signed up on this device */}
+        <View style={[styles.card, errors.recipient && { borderWidth: 1.5, borderColor: COLORS.ERROR }]}>
           <Text style={styles.sectionLbl}>To</Text>
-          <Input
-            label="Recipient email"
-            placeholder="her@email.com"
-            value={recipientEmail}
-            onChangeText={setRecipientEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            error={errors.recipientEmail}
-            icon="mail-outline"
-          />
-          <Text style={styles.hintText}>
-            She'll see your video proposal in her Today tab. Make sure the email is exactly the one she used to sign up.
-          </Text>
+
+          {recipients.length === 0 ? (
+            <View style={styles.noCandidates}>
+              <Ionicons name="people-outline" size={28} color={COLORS.TEXT_MUTED} />
+              <Text style={styles.noCandidatesTitle}>No one to propose to yet</Text>
+              <Text style={styles.noCandidatesSub}>
+                Once another user signs up, you'll be able to send them a proposal.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.recipientList}>
+              {recipients.map((r) => {
+                const selected = selectedRecipient?.email === r.email;
+                return (
+                  <TouchableOpacity
+                    key={r.email}
+                    style={[styles.recipientRow, selected && styles.recipientRowOn]}
+                    onPress={() => setSelectedRecipient(r)}
+                    activeOpacity={0.85}
+                  >
+                    {r.photoUrl ? (
+                      <Image source={{ uri: r.photoUrl }} style={styles.recipientAvatar} />
+                    ) : (
+                      <View style={[styles.recipientAvatar, styles.recipientAvatarPlaceholder]}>
+                        <Ionicons name="person" size={18} color={COLORS.TEXT_MUTED} />
+                      </View>
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.recipientNameRow}>
+                        <Text style={styles.recipientName}>
+                          {r.name}{r.age ? `, ${r.age}` : ''}
+                        </Text>
+                        {r.verified && <Ionicons name="shield-checkmark" size={13} color={COLORS.LIKE} />}
+                      </View>
+                      {(r.city || r.gender) ? (
+                        <Text style={styles.recipientMeta} numberOfLines={1}>
+                          {[r.gender, r.city].filter(Boolean).join(' · ')}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <View style={[styles.radio, selected && styles.radioOn]}>
+                      {selected && <View style={styles.radioDot} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          {errors.recipient && <Text style={styles.err}>{errors.recipient}</Text>}
         </View>
 
         {/* Mandatory video introduction — sits first because every proposal needs it */}
@@ -402,6 +450,31 @@ const styles = StyleSheet.create({
   sectionLbl: { fontSize: 10, fontWeight: '800', color: COLORS.TEXT_MUTED, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 },
   hintText: { fontSize: 11, color: COLORS.TEXT_MUTED, lineHeight: 16, marginTop: 4 },
   row: { flexDirection: 'row', gap: 10 },
+
+  /* Recipient picker */
+  recipientList: { gap: 8 },
+  recipientRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14,
+    borderWidth: 1.5, borderColor: COLORS.BORDER_LIGHT, backgroundColor: COLORS.SURFACE,
+  },
+  recipientRowOn: { borderColor: COLORS.BRAND, backgroundColor: COLORS.BRAND_MUTED },
+  recipientAvatar: { width: 44, height: 44, borderRadius: 14 },
+  recipientAvatarPlaceholder: {
+    backgroundColor: COLORS.BORDER_LIGHT, justifyContent: 'center', alignItems: 'center',
+  },
+  recipientNameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  recipientName: { fontSize: 14, fontWeight: '700', color: COLORS.TEXT },
+  recipientMeta: { fontSize: 11, color: COLORS.TEXT_MUTED, marginTop: 2, textTransform: 'capitalize' },
+  radio: {
+    width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: COLORS.BORDER,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  radioOn: { borderColor: COLORS.BRAND },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.BRAND },
+  noCandidates: { alignItems: 'center', paddingVertical: 16, gap: 6 },
+  noCandidatesTitle: { fontSize: 14, fontWeight: '700', color: COLORS.TEXT },
+  noCandidatesSub: { fontSize: 12, color: COLORS.TEXT_MUTED, textAlign: 'center', paddingHorizontal: 16 },
 
   typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
   typeCard: {

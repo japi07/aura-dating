@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/auth';
 import { useProposalsStore } from '@/store/proposals';
 import { useDatesStore } from '@/store/dates';
 import { useSettingsStore } from '@/store/settings';
+import { useUsersStore } from '@/store/users';
 import { COLORS } from '@/constants/colors';
 import {
   registerForPushNotifications,
@@ -17,6 +18,8 @@ export default function RootLayout() {
   const hydrateProposals = useProposalsStore((s) => s.hydrate);
   const hydrateDates = useDatesStore((s) => s.hydrate);
   const hydrateSettings = useSettingsStore((s) => s.hydrate);
+  const hydrateUsers = useUsersStore((s) => s.hydrate);
+  const upsertUser = useUsersStore((s) => s.upsertUser);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -24,15 +27,18 @@ export default function RootLayout() {
       // 1. Restore auth state
       await hydrate();
       // 2. Hydrate persistent app state in parallel
-      await Promise.all([hydrateProposals(), hydrateDates(), hydrateSettings()]);
+      await Promise.all([hydrateProposals(), hydrateDates(), hydrateSettings(), hydrateUsers()]);
       // 3. Mark ready so first frame can render
       setIsReady(true);
     })();
   }, []);
 
-  // Once user is authenticated, set up notifications (non-blocking)
+  // Once user is authenticated, set up notifications + ensure they're in the
+  // local users directory so they can be discovered by other accounts on
+  // this device.
   useEffect(() => {
     if (!token || !user) return;
+    upsertUser(user);
     (async () => {
       await registerForPushNotifications();
       await scheduleDailyProposalReminder();
