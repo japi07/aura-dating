@@ -7,10 +7,10 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Venue } from '@/constants/london';
 
-// v2 — bumped when we made videoUrl required so old cached proposals
-// (without videoUrl) are wiped on next hydrate.
-const STORAGE_KEY_PROPOSALS = 'aura.proposals.v2';
-const STORAGE_KEY_DECISIONS = 'aura.decisions.v2';
+// v3 — bumped when we added recipientEmail (mandatory) for cross-account routing.
+// Older cached proposals are wiped on next hydrate.
+const STORAGE_KEY_PROPOSALS = 'aura.proposals.v3';
+const STORAGE_KEY_DECISIONS = 'aura.decisions.v3';
 
 export interface ProposalUser {
   id: string;
@@ -92,9 +92,9 @@ export const useProposalsStore = create<ProposalsState>((set, get) => ({
       const proposals: Proposal[] = propRaw ? JSON.parse(propRaw) : [];
       const decisions: Record<string, DecisionRecord> = decRaw ? JSON.parse(decRaw) : {};
 
-      // Defensive: drop any proposals that don't have the required video field
-      // (might be left over from older app versions)
-      const valid = proposals.filter(p => !!p.videoUrl);
+      // Defensive: drop proposals missing the required fields, in case
+      // older cached data is still lying around.
+      const valid = proposals.filter(p => !!p?.videoUrl && !!p?.recipientEmail);
       set({ proposals: valid, decisions, isHydrated: true });
     } catch (e: any) {
       set({ error: e?.message || 'Failed to load proposals', isHydrated: true });
@@ -153,16 +153,18 @@ export const useProposalsStore = create<ProposalsState>((set, get) => ({
 
   pendingForUser: (email: string) => {
     const { proposals, decisions } = get();
+    if (!email) return [];
     const lc = email.toLowerCase().trim();
     return proposals
-      .filter(p => p.recipientEmail.toLowerCase() === lc && !decisions[p.id])
+      .filter(p => p?.recipientEmail?.toLowerCase?.() === lc && !decisions[p.id])
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   },
 
   sentByUser: (email: string) => {
+    if (!email) return [];
     const lc = email.toLowerCase().trim();
     return get().proposals
-      .filter(p => p.from.email?.toLowerCase() === lc)
+      .filter(p => p?.from?.email?.toLowerCase?.() === lc)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   },
 }));
