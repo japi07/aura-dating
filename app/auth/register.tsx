@@ -5,7 +5,9 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
 import { useAuthStore, type User } from '@/store/auth';
+import { useUsersStore } from '@/store/users';
 import { authApi } from '@/lib/api';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -25,6 +27,7 @@ const GENDER_INTERESTS = ['Male', 'Female', 'Everyone'];
 export default function RegisterScreen() {
   const router = useRouter();
   const { setToken, setUser } = useAuthStore();
+  const upsertUser = useUsersStore((s) => s.upsertUser);
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -76,8 +79,16 @@ export default function RegisterScreen() {
   };
 
   const handleNextStep = () => {
-    if (step === 1 && validateStep1()) { setErrors({}); setStep(2); }
-    else if (step === 2 && validateStep2()) { setErrors({}); setStep(3); }
+    if (step === 1 && validateStep1()) {
+      Haptics.selectionAsync().catch(() => {});
+      setErrors({}); setStep(2);
+    } else if (step === 2 && validateStep2()) {
+      Haptics.selectionAsync().catch(() => {});
+      setErrors({}); setStep(3);
+    } else {
+      // Validation failed — short error buzz
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+    }
   };
 
   const pickImage = async () => {
@@ -138,7 +149,7 @@ export default function RegisterScreen() {
       });
       // Backend reachable → use real token + user
       await setToken(response.token);
-      setUser({
+      const finalUser: User = {
         id: response.user.id,
         email: response.user.email,
         name: response.user.name,
@@ -151,7 +162,10 @@ export default function RegisterScreen() {
         gender: response.user.gender ?? gender.toLowerCase(),
         genderInterest: response.user.genderInterest ?? genderInterest.toLowerCase(),
         photoUrl: response.user.photoUrl ?? localUser.photoUrl,
-      });
+      };
+      setUser(finalUser);
+      await upsertUser(finalUser);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       router.replace('/');
       return;
     } catch (error: any) {
@@ -165,6 +179,8 @@ export default function RegisterScreen() {
         // Local-only fallback so the app is usable without the backend
         await setToken(`local-${localUser.id}`);
         setUser(localUser);
+        await upsertUser(localUser);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         router.replace('/');
         return;
       }
