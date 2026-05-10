@@ -1,57 +1,118 @@
 import React, { useState } from 'react';
 import {
-  StyleSheet, View, Text, ScrollView,
-  Alert, TouchableOpacity,
+  StyleSheet, View, Text, ScrollView, SafeAreaView,
+  Alert, TouchableOpacity, Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { COLORS } from '@/constants/colors';
 import { Button } from '@/components/Button';
-import { addDateToCalendar } from '@/lib/calendar';
-import { openInMaps } from '@/lib/maps';
+import { Avatar } from '@/components/Avatar';
 
-/**
- * Event detail screen.
- * In production the event data is fetched by id from the events API.
- * For now, no events exist so we show a graceful empty state.
- */
+const EVT = {
+  id: '1', title: 'Wine Tasting Night', date: 'April 5, 2026', time: '7:00 PM',
+  location: 'SoHo Wine Bar', address: '123 Spring St, New York, NY 10012',
+  type: 'Social', emoji: '🍷',
+  description: 'An intimate evening of curated wine tasting from Burgundy, Tuscany, and Napa Valley, paired with seasonal appetizers. Perfect for making meaningful connections in a relaxed, sophisticated setting.',
+  spotsAvailable: 3, totalSpots: 12,
+  organizer: { name: 'Alex', photoUrl: 'https://i.pravatar.cc/150?img=3' },
+  attendees: [
+    { name: 'Sarah', photoUrl: 'https://i.pravatar.cc/150?img=47' },
+    { name: 'Emma', photoUrl: 'https://i.pravatar.cc/150?img=48' },
+    { name: 'Jessica', photoUrl: 'https://i.pravatar.cc/150?img=49' },
+  ],
+};
+
 export default function EventDetailScreen() {
   const router = useRouter();
-  const { eventId } = useLocalSearchParams<{ eventId: string }>();
+  const [applied, setApplied] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const fill = ((EVT.totalSpots - EVT.spotsAvailable) / EVT.totalSpots) * 100;
 
-  const close = () => {
-    Haptics.selectionAsync().catch(() => {});
-    // Dismiss any modal stack we're inside, then jump to the tabs root.
-    // This is robust against deep-linked / restored routes where the back
-    // stack is empty.
-    try { router.dismissAll(); } catch {}
-    try { router.replace('/' as any); } catch {}
+  const handleApply = async () => {
+    setLoading(true);
+    await new Promise((r) => setTimeout(r, 1000));
+    setApplied(true); setLoading(false);
+    Alert.alert('You\'re in!', 'Your spot has been reserved.');
   };
 
-  // No real event data yet — once the events API is wired up, fetch by eventId here
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.back} onPress={close}>
-          <Ionicons name="close" size={20} color={COLORS.TEXT} />
+        <TouchableOpacity style={styles.back} onPress={() => router.back()}>
+          <Ionicons name="close" size={18} color={COLORS.TEXT} />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.empty}>
-        <View style={styles.emptyIcon}>
-          <Ionicons name="calendar-outline" size={42} color={COLORS.BRAND} />
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+        {/* Hero */}
+        <View style={styles.hero}>
+          <View style={styles.emojiBox}><Text style={styles.emojiLg}>{EVT.emoji}</Text></View>
+          <View style={styles.typePill}><Text style={styles.typeText}>{EVT.type}</Text></View>
+          <Text style={styles.eventTitle}>{EVT.title}</Text>
         </View>
-        <Text style={styles.emptyTitle}>This event isn't available</Text>
-        <Text style={styles.emptySub}>
-          It may have been cancelled or you're using a stale link. Take a look at the upcoming London events instead.
-        </Text>
 
-        <TouchableOpacity style={styles.backBtn} onPress={close}>
-          <Ionicons name="arrow-back" size={16} color="#fff" />
-          <Text style={styles.backBtnText}>Back to events</Text>
-        </TouchableOpacity>
+        {/* Info */}
+        <View style={styles.infoCard}>
+          {[
+            { icon: 'calendar-outline', lbl: 'Date & Time', val: `${EVT.date} · ${EVT.time}` },
+            { icon: 'location-outline', lbl: 'Venue', val: EVT.location, sub: EVT.address },
+            { icon: 'people-outline', lbl: 'Spots', val: `${EVT.spotsAvailable} of ${EVT.totalSpots} remaining` },
+          ].map((r, i) => (
+            <View key={r.lbl} style={[styles.infoRow, i < 2 && styles.infoRowBorder]}>
+              <View style={styles.infoIcon}><Ionicons name={r.icon as any} size={15} color={COLORS.PRIMARY} /></View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLbl}>{r.lbl}</Text>
+                <Text style={styles.infoVal}>{r.val}</Text>
+                {r.sub && <Text style={styles.infoSub}>{r.sub}</Text>}
+                {r.lbl === 'Spots' && (
+                  <View style={styles.barTrack}><View style={[styles.barFill, { width: `${fill}%` }]} /></View>
+                )}
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* About */}
+        <View style={styles.card}>
+          <Text style={styles.cardLbl}>About</Text>
+          <Text style={styles.desc}>{EVT.description}</Text>
+        </View>
+
+        {/* Organizer */}
+        <View style={styles.card}>
+          <Text style={styles.cardLbl}>Organised By</Text>
+          <View style={styles.orgRow}>
+            <Avatar photoUrl={EVT.organizer.photoUrl} size="md" ring />
+            <View>
+              <Text style={styles.orgName}>{EVT.organizer.name}</Text>
+              <Text style={styles.orgRole}>Event Organizer</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Attendees */}
+        <View style={styles.card}>
+          <Text style={styles.cardLbl}>Going ({EVT.attendees.length})</Text>
+          <View style={styles.attendees}>
+            {EVT.attendees.map((a, i) => (
+              <View key={i} style={[styles.attItem, { marginLeft: i > 0 ? -8 : 0 }]}>
+                <Image source={{ uri: a.photoUrl }} style={styles.attAvatar} />
+              </View>
+            ))}
+          </View>
+        </View>
+      </ScrollView>
+
+      <View style={styles.ctaBar}>
+        <Button
+          title={applied ? 'Spot Reserved' : 'Reserve My Spot'}
+          onPress={handleApply}
+          loading={loading}
+          disabled={applied}
+          size="lg"
+          style={{ flex: 1 }}
+        />
       </View>
     </SafeAreaView>
   );
@@ -61,28 +122,46 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.BG },
   topBar: { paddingHorizontal: 14, paddingVertical: 10 },
   back: {
-    width: 38, height: 38, borderRadius: 19, backgroundColor: COLORS.SURFACE,
+    width: 34, height: 34, borderRadius: 12, backgroundColor: COLORS.SURFACE,
     justifyContent: 'center', alignItems: 'center',
-    shadowColor: COLORS.SHADOW, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 6, elevation: 2,
+    shadowColor: '#1A1A2E', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
   },
+  hero: { alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16 },
+  emojiBox: { width: 72, height: 72, borderRadius: 22, backgroundColor: COLORS.PRIMARY_MUTED, justifyContent: 'center', alignItems: 'center', marginBottom: 14 },
+  emojiLg: { fontSize: 34 },
+  typePill: { backgroundColor: COLORS.PRIMARY_MUTED, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginBottom: 8 },
+  typeText: { fontSize: 11, fontWeight: '800', color: COLORS.PRIMARY, letterSpacing: 0.5 },
+  eventTitle: { fontSize: 24, fontWeight: '800', color: COLORS.TEXT, textAlign: 'center', letterSpacing: -0.5 },
 
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
-  emptyIcon: {
-    width: 88, height: 88, borderRadius: 28, backgroundColor: COLORS.BRAND_MUTED,
-    justifyContent: 'center', alignItems: 'center', marginBottom: 22,
+  infoCard: {
+    marginHorizontal: 14, marginBottom: 10, backgroundColor: COLORS.SURFACE, borderRadius: 16, overflow: 'hidden',
+    shadowColor: '#1A1A2E', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2,
   },
-  emptyTitle: {
-    fontSize: 22, fontWeight: '800', color: COLORS.TEXT, marginBottom: 10,
-    letterSpacing: -0.5, textAlign: 'center',
+  infoRow: { flexDirection: 'row', gap: 12, padding: 14, alignItems: 'flex-start' },
+  infoRowBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.BORDER_LIGHT },
+  infoIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: COLORS.PRIMARY_MUTED, justifyContent: 'center', alignItems: 'center' },
+  infoContent: { flex: 1 },
+  infoLbl: { fontSize: 10, fontWeight: '700', color: COLORS.TEXT_MUTED, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+  infoVal: { fontSize: 14, fontWeight: '600', color: COLORS.TEXT },
+  infoSub: { fontSize: 12, color: COLORS.TEXT_MUTED, marginTop: 1 },
+  barTrack: { marginTop: 6, height: 3, backgroundColor: COLORS.BORDER_LIGHT, borderRadius: 2, overflow: 'hidden' },
+  barFill: { height: '100%', backgroundColor: COLORS.PRIMARY_LIGHT, borderRadius: 2 },
+
+  card: {
+    marginHorizontal: 14, marginBottom: 10, padding: 16, backgroundColor: COLORS.SURFACE, borderRadius: 16,
+    shadowColor: '#1A1A2E', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2,
   },
-  emptySub: {
-    fontSize: 14, color: COLORS.TEXT_SECONDARY, textAlign: 'center',
-    lineHeight: 21, marginBottom: 28,
+  cardLbl: { fontSize: 10, fontWeight: '800', color: COLORS.TEXT_MUTED, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 },
+  desc: { fontSize: 14, color: COLORS.TEXT_SECONDARY, lineHeight: 22 },
+  orgRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  orgName: { fontSize: 14, fontWeight: '700', color: COLORS.TEXT },
+  orgRole: { fontSize: 12, color: COLORS.TEXT_MUTED },
+  attendees: { flexDirection: 'row', alignItems: 'center' },
+  attItem: { borderWidth: 2, borderColor: COLORS.SURFACE, borderRadius: 18 },
+  attAvatar: { width: 32, height: 32, borderRadius: 16 },
+
+  ctaBar: {
+    position: 'absolute', bottom: 0, left: 0, right: 0, padding: 14, paddingBottom: 24,
+    backgroundColor: COLORS.SURFACE, borderTopWidth: 1, borderTopColor: COLORS.BORDER_LIGHT, flexDirection: 'row',
   },
-  backBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: COLORS.BRAND, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 26,
-    shadowColor: COLORS.BRAND, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 14, elevation: 8,
-  },
-  backBtnText: { fontSize: 14, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
 });

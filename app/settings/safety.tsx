@@ -35,7 +35,7 @@ export default function SafetyScreen() {
       <StatusBar barStyle="dark-content" />
 
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : (router.dismissAll(), router.replace('/')))} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={26} color={COLORS.TEXT} />
         </TouchableOpacity>
         <Text style={styles.title}>Safety</Text>
