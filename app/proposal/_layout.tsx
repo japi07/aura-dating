@@ -1,15 +1,6 @@
-import React from 'react';
-import { Stack } from 'expo-router';
+import { Slot } from 'expo-router';
 
+// Slot lets the parent root navigator handle back actions properly.
 export default function ProposalLayout() {
-  return (
-    <Stack>
-      <Stack.Screen
-        name="create"
-        options={{
-          headerShown: false,
-        }}
-      />
-    </Stack>
-  );
+  return <Slot />;
 }

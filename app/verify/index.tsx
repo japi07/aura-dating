@@ -138,7 +138,7 @@ export default function VerifyScreen() {
         <StatusBar barStyle="dark-content" />
 
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.backBtn}>
+          <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : (router.dismissAll(), router.replace('/')))} style={styles.backBtn}>
             <Ionicons name="close" size={26} color={COLORS.TEXT} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Verify yourself</Text>
@@ -401,7 +401,7 @@ export default function VerifyScreen() {
       </View>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => (router.canGoBack() ? router.back() : (router.dismissAll(), router.replace('/')))} activeOpacity={0.85}>
           <Ionicons name="sparkles" size={20} color="#fff" />
           <Text style={styles.primaryBtnText}>Back to my profile</Text>
         </TouchableOpacity>

@@ -96,7 +96,7 @@ export default function EditProfileScreen() {
       });
 
       Alert.alert('Saved', 'Your profile has been updated.', [
-        { text: 'OK', onPress: () => (router.canGoBack() ? router.back() : router.replace('/(tabs)')) },
+        { text: 'OK', onPress: () => (router.canGoBack() ? router.back() : (router.dismissAll(), router.replace('/'))) },
       ]);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to save profile');
@@ -109,7 +109,7 @@ export default function EditProfileScreen() {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : (router.dismissAll(), router.replace('/')))} style={styles.backBtn}>
           <Ionicons name="close" size={18} color={COLORS.TEXT} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit Profile</Text>

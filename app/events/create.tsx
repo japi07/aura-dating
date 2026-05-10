@@ -50,7 +50,7 @@ export default function CreateEventScreen() {
     try {
       await new Promise((resolve) => setTimeout(resolve, 1500));
       Alert.alert('Event Created', 'Your event is now live!', [
-        { text: 'Done', onPress: () => (router.canGoBack() ? router.back() : router.replace('/(tabs)')) },
+        { text: 'Done', onPress: () => (router.canGoBack() ? router.back() : (router.dismissAll(), router.replace('/'))) },
       ]);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to create event');
@@ -63,7 +63,7 @@ export default function CreateEventScreen() {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : (router.dismissAll(), router.replace('/')))} style={styles.backBtn}>
           <Ionicons name="close" size={18} color={COLORS.TEXT} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Create Event</Text>

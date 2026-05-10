@@ -23,11 +23,11 @@ export default function EventDetailScreen() {
 
   const close = () => {
     Haptics.selectionAsync().catch(() => {});
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)/events');
-    }
+    // Dismiss any modal stack we're inside, then jump to the tabs root.
+    // This is robust against deep-linked / restored routes where the back
+    // stack is empty.
+    try { router.dismissAll(); } catch {}
+    try { router.replace('/' as any); } catch {}
   };
 
   // No real event data yet — once the events API is wired up, fetch by eventId here

@@ -1,8 +1,6 @@
-import { Stack } from 'expo-router';
-import { COLORS } from '@/constants/colors';
+import { Slot } from 'expo-router';
 
+// Slot lets the parent root navigator handle back actions properly.
 export default function ProfileLayout() {
-  return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: COLORS.BG } }} />
-  );
+  return <Slot />;
 }

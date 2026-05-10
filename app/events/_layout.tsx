@@ -1,21 +1,7 @@
-import React from 'react';
-import { Stack } from 'expo-router';
+import { Slot } from 'expo-router';
 
+// Slot (no inner Stack) so back actions bubble up to the root navigator
+// instead of dead-ending inside a one-screen nested stack.
 export default function EventsLayout() {
-  return (
-    <Stack>
-      <Stack.Screen
-        name="[eventId]"
-        options={{
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        name="create"
-        options={{
-          headerShown: false,
-        }}
-      />
-    </Stack>
-  );
+  return <Slot />;
 }

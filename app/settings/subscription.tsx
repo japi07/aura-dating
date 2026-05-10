@@ -41,7 +41,7 @@ export default function SubscriptionScreen() {
       <StatusBar barStyle="dark-content" />
 
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : (router.dismissAll(), router.replace('/')))} style={styles.backBtn}>
           <Ionicons name="close" size={26} color={COLORS.TEXT} />
         </TouchableOpacity>
         <View />
