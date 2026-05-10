@@ -22,11 +22,9 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const { user, setUser } = useAuthStore();
 
-  // Edit only makes sense if we have a logged-in user
-  if (!user) {
-    router.replace('/auth/login');
-    return null;
-  }
+  // Auth gate in _layout.tsx prevents this screen from showing without a user;
+  // short-circuit defensively rather than triggering a navigation during render.
+  if (!user) return null;
 
   const current = user;
 

@@ -24,12 +24,9 @@ export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
   const [promptExpanded, setPromptExpanded] = useState<number | null>(null);
 
-  // If for any reason we land on Profile without a logged-in user, send them
-  // back to login. There is no demo profile any more.
-  if (!user) {
-    router.replace('/auth/login');
-    return null;
-  }
+  // The auth gate in _layout.tsx ensures user is set before this screen renders,
+  // but we still defensively short-circuit if hot-reload loses state.
+  if (!user) return null;
 
   const profile = user;
   const isVerified = !!profile.verified;
@@ -37,7 +34,15 @@ export default function ProfileScreen() {
   const handleLogout = () => {
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', onPress: async () => { await logout(); router.replace('/auth/login'); }, style: 'destructive' },
+      {
+        text: 'Log Out',
+        style: 'destructive',
+        onPress: async () => {
+          // _layout.tsx's redirect prop will swap us to /auth automatically
+          // once the auth state clears — no manual navigation needed.
+          await logout();
+        },
+      },
     ]);
   };
 
