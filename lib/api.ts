@@ -227,3 +227,79 @@ export const eventsApi = {
     return response.data;
   },
 };
+
+// ─── Verification API ────────────────────────────────────────────────
+//
+// Real human-verification flow: the user uploads a selfie + a short
+// liveness video. The backend pipes both to a vendor (Persona, Onfido,
+// AWS Rekognition, etc.) for face-match + spoof detection. The endpoint
+// returns either `verified`, `rejected`, or `pending` (manual review).
+//
+// If the backend is unreachable, the calling code falls back to
+// "pending review" mode so the user isn't blocked.
+// ─────────────────────────────────────────────────────────────────────
+
+export type VerificationStatus = 'unverified' | 'submitting' | 'pending' | 'verified' | 'rejected';
+
+export interface VerificationSubmitResult {
+  status: 'verified' | 'pending' | 'rejected';
+  verificationId: string;
+  /** Reviewed at, or null if pending */
+  reviewedAt?: string;
+  /** Reason if rejected */
+  reason?: string;
+  /** Estimated review time when status is pending */
+  estimatedReviewMinutes?: number;
+}
+
+export const verificationApi = {
+  /**
+   * Upload selfie + liveness video for human verification.
+   * Backend runs face-match + liveness detection and returns a verdict.
+   * Includes upload progress so the UI can show it.
+   */
+  submit: async (
+    args: {
+      photoUri: string;
+      videoUri: string;
+      videoDurationSec?: number;
+    },
+    onProgress?: (pct: number) => void,
+  ): Promise<VerificationSubmitResult> => {
+    const client = getApiClient();
+    const formData = new FormData();
+    formData.append('photo', {
+      uri: args.photoUri,
+      name: 'selfie.jpg',
+      type: 'image/jpeg',
+    } as any);
+    formData.append('video', {
+      uri: args.videoUri,
+      name: 'liveness.mp4',
+      type: 'video/mp4',
+    } as any);
+    if (args.videoDurationSec) {
+      formData.append('videoDurationSec', String(args.videoDurationSec));
+    }
+
+    const response = await client.post('/verification/submit', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      // Larger timeout because uploads can be slow on mobile networks
+      timeout: 60000,
+      onUploadProgress: (e) => {
+        if (e.total && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+      },
+    });
+    return response.data;
+  },
+
+  /**
+   * Poll current verification status. Used while the user is in 'pending'
+   * state (after a successful submit but before manual review completes).
+   */
+  status: async (): Promise<{ status: VerificationStatus; reason?: string }> => {
+    const client = getApiClient();
+    const response = await client.get('/verification/status');
+    return response.data;
+  },
+};

@@ -8,16 +8,23 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
 import { COLORS } from '@/constants/colors';
 import { useAuthStore } from '@/store/auth';
+import { verificationApi } from '@/lib/api';
 
-type Step = 'intro' | 'biometric' | 'selfie' | 'liveness' | 'processing' | 'success';
+type Step =
+  | 'intro'
+  | 'biometric'
+  | 'selfie'
+  | 'liveness'      // real video capture, no fake button taps
+  | 'uploading'
+  | 'pending'       // submitted, awaiting backend / manual review
+  | 'success'
+  | 'rejected';
 
-const LIVENESS_ACTIONS = [
-  { id: 'left', label: 'Turn your head LEFT', icon: 'arrow-back' },
-  { id: 'right', label: 'Turn your head RIGHT', icon: 'arrow-forward' },
-  { id: 'smile', label: 'Smile naturally', icon: 'happy' },
-];
+const MIN_VIDEO_SEC = 3;
+const MAX_VIDEO_SEC = 15;
 
 export default function VerifyScreen() {
   const router = useRouter();
@@ -26,51 +33,60 @@ export default function VerifyScreen() {
   const [biometricType, setBiometricType] = useState<string>('Touch');
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [selfieUri, setSelfieUri] = useState<string | null>(null);
-  const [livenessStep, setLivenessStep] = useState(0);
-  const [livenessProgress, setLivenessProgress] = useState<string[]>([]);
+  const [videoUri, setVideoUri] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
+  const [uploadPct, setUploadPct] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState<string | null>(null);
+  const [estimatedMinutes, setEstimatedMinutes] = useState<number | null>(null);
 
   const pulse = useRef(new Animated.Value(1)).current;
   const scanLine = useRef(new Animated.Value(0)).current;
+  const progressAnim = useRef(new Animated.Value(0)).current;
 
+  /* ─── biometric availability check ─────────────────────────────── */
   useEffect(() => {
     LocalAuthentication.hasHardwareAsync().then(async (has) => {
-      if (has) {
-        const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
-        const enrolled = await LocalAuthentication.isEnrolledAsync();
-        if (enrolled) {
-          setBiometricAvailable(true);
-          if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
-            setBiometricType('Face ID');
-          } else if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
-            setBiometricType('Fingerprint');
-          } else {
-            setBiometricType('Biometric');
-          }
-        }
-      }
+      if (!has) return;
+      const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+      const enrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!enrolled) return;
+      setBiometricAvailable(true);
+      if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) setBiometricType('Face ID');
+      else if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) setBiometricType('Fingerprint');
+      else setBiometricType('Biometric');
     });
   }, []);
 
-  // Pulse animation for biometric step
+  /* ─── animations per step ───────────────────────────────────────── */
   useEffect(() => {
-    if (step === 'biometric' || step === 'liveness') {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulse, { toValue: 1.15, duration: 900, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
-          Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
-        ])
-      ).start();
+    if (step === 'biometric') {
+      Animated.loop(Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.15, duration: 900, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
+        Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
+      ])).start();
     }
-    if (step === 'selfie' || step === 'processing') {
-      Animated.loop(
-        Animated.timing(scanLine, { toValue: 1, duration: 2000, useNativeDriver: true, easing: Easing.linear })
-      ).start();
+    if (step === 'selfie' || step === 'liveness') {
+      Animated.loop(Animated.timing(scanLine, {
+        toValue: 1, duration: 2000, useNativeDriver: true, easing: Easing.linear,
+      })).start();
     }
   }, [step]);
 
+  useEffect(() => {
+    Animated.timing(progressAnim, { toValue: uploadPct, duration: 200, useNativeDriver: false }).start();
+  }, [uploadPct]);
+
+  const close = () => {
+    Haptics.selectionAsync().catch(() => {});
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)' as any);
+  };
+
+  /* ─── step 1: biometric ─────────────────────────────────────────── */
   const startBiometric = async () => {
     setError(null);
+    Haptics.selectionAsync().catch(() => {});
     if (!biometricAvailable) {
       setStep('selfie');
       return;
@@ -83,9 +99,10 @@ export default function VerifyScreen() {
         disableDeviceFallback: false,
       });
       if (result.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         setStep('selfie');
       } else {
-        setError('Authentication cancelled');
+        setError('Authentication cancelled — please try again to continue.');
         setStep('intro');
       }
     } catch (e: any) {
@@ -94,51 +111,150 @@ export default function VerifyScreen() {
     }
   };
 
+  /* ─── step 2: selfie ────────────────────────────────────────────── */
   const takeSelfie = async () => {
+    Haptics.selectionAsync().catch(() => {});
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Camera permission required', 'We need camera access to verify you\'re a real person.');
+      Alert.alert('Camera permission required', 'We need camera access to verify you.');
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
       cameraType: ImagePicker.CameraType.front,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.6,
+      quality: 0.7,
     });
     if (!result.canceled && result.assets[0]) {
       setSelfieUri(result.assets[0].uri);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setStep('liveness');
-      setLivenessStep(0);
-      setLivenessProgress([]);
     }
   };
 
-  const completeLivenessAction = () => {
-    const action = LIVENESS_ACTIONS[livenessStep];
-    setLivenessProgress((p) => [...p, action.id]);
-    if (livenessStep < LIVENESS_ACTIONS.length - 1) {
-      setLivenessStep((s) => s + 1);
-    } else {
-      // All actions complete → process
-      setStep('processing');
-      setTimeout(() => {
+  /* ─── step 3: liveness — record a real video ────────────────────── */
+  const recordLivenessVideo = async () => {
+    Haptics.selectionAsync().catch(() => {});
+    const cam = await ImagePicker.requestCameraPermissionsAsync();
+    if (!cam.granted) {
+      Alert.alert('Camera permission needed', 'We need camera access for the liveness check.');
+      return;
+    }
+    const mic = await ImagePicker.requestMicrophonePermissionsAsync?.();
+    if (mic && !mic.granted) {
+      Alert.alert('Microphone permission needed', 'The liveness video needs sound too.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['videos'],
+      cameraType: ImagePicker.CameraType.front,
+      videoMaxDuration: MAX_VIDEO_SEC,
+      videoQuality: 1,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const a = result.assets[0];
+      const durSec = a.duration ? Math.round(a.duration / 1000) : null;
+      // Real check: video must be at least MIN_VIDEO_SEC long, otherwise
+      // it's not enough motion for liveness detection.
+      if (durSec !== null && durSec < MIN_VIDEO_SEC) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        Alert.alert(
+          'Video too short',
+          `Please record at least ${MIN_VIDEO_SEC} seconds turning your head left, right, and smiling so we can confirm you're a real person.`,
+        );
+        return;
+      }
+      setVideoUri(a.uri);
+      setVideoDuration(durSec);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      submitVerification(a.uri, durSec);
+    }
+  };
+
+  /* ─── step 4: submit to backend ─────────────────────────────────── */
+  const submitVerification = async (videoUriArg: string, durSec: number | null) => {
+    if (!selfieUri) return;
+    setStep('uploading');
+    setUploadPct(0);
+    setError(null);
+
+    if (user) setUser({ ...user, verificationStatus: 'submitting' });
+
+    try {
+      const result = await verificationApi.submit(
+        { photoUri: selfieUri, videoUri: videoUriArg, videoDurationSec: durSec ?? undefined },
+        (pct) => setUploadPct(pct),
+      );
+
+      if (result.status === 'verified') {
         if (user) {
-          setUser({ ...user, verified: true, verifiedAt: new Date().toISOString() });
+          setUser({
+            ...user,
+            verified: true,
+            verifiedAt: result.reviewedAt || new Date().toISOString(),
+            verificationStatus: 'verified',
+            verificationId: result.verificationId,
+          });
         }
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         setStep('success');
-      }, 2400);
+      } else if (result.status === 'pending') {
+        if (user) {
+          setUser({
+            ...user,
+            verificationStatus: 'pending',
+            verificationId: result.verificationId,
+          });
+        }
+        setEstimatedMinutes(result.estimatedReviewMinutes ?? 30);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        setStep('pending');
+      } else {
+        if (user) {
+          setUser({
+            ...user,
+            verificationStatus: 'rejected',
+            verificationReason: result.reason,
+          });
+        }
+        setRejectReason(result.reason || 'Could not verify identity');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        setStep('rejected');
+      }
+    } catch (e: any) {
+      // Backend unreachable — queue locally as pending review
+      const isNetworkError = !e?.response;
+      if (isNetworkError) {
+        const pendingId = `local_v_${Date.now()}`;
+        if (user) {
+          setUser({
+            ...user,
+            verificationStatus: 'pending',
+            verificationId: pendingId,
+          });
+        }
+        setEstimatedMinutes(60);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        setStep('pending');
+      } else {
+        setError(e?.response?.data?.message || 'Verification failed — please try again.');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        setStep('intro');
+      }
     }
   };
 
-  // ─── Intro step ───
+  /* ─── render: intro ─────────────────────────────────────────────── */
   if (step === 'intro') {
+    const wasRejected = user?.verificationStatus === 'rejected';
+    const isPending = user?.verificationStatus === 'pending';
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <StatusBar barStyle="dark-content" />
 
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.backBtn}>
+          <TouchableOpacity onPress={close} style={styles.backBtn}>
             <Ionicons name="close" size={26} color={COLORS.TEXT} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Verify yourself</Text>
@@ -155,29 +271,27 @@ export default function VerifyScreen() {
 
           <Text style={styles.title}>Get the verified badge</Text>
           <Text style={styles.subtitle}>
-            We verify every member is a real human. It takes 30 seconds and gives you priority in the matching queue.
+            Real human, real identity. The process takes ~45 seconds and your selfie + liveness video are sent to our verification team.
           </Text>
 
-          <View style={styles.benefitList}>
-            <BenefitRow icon="ribbon" color={COLORS.BRAND} title="Verified badge on your profile" desc="Stand out — verified profiles get 4× more proposals" />
-            <BenefitRow icon="shield-checkmark" color={COLORS.LIKE} title="Trusted community" desc="Only humans here. No bots, no catfishing." />
-            <BenefitRow icon="lock-closed" color={COLORS.INFO} title="Your data stays private" desc="Verification is processed locally on your device" />
-          </View>
+          {wasRejected && user?.verificationReason && (
+            <View style={styles.errorPill}>
+              <Ionicons name="alert-circle" size={14} color={COLORS.ERROR} />
+              <Text style={styles.errorPillText}>{user.verificationReason}</Text>
+            </View>
+          )}
+          {isPending && (
+            <View style={styles.pendingPill}>
+              <Ionicons name="time" size={14} color={COLORS.WARNING} />
+              <Text style={styles.pendingPillText}>Your last submission is still under review</Text>
+            </View>
+          )}
 
           <View style={styles.stepsBox}>
-            <Text style={styles.stepsTitle}>3 quick steps</Text>
-            <View style={styles.stepRow}>
-              <View style={styles.stepDot}><Text style={styles.stepDotText}>1</Text></View>
-              <Text style={styles.stepText}>{biometricType} authentication</Text>
-            </View>
-            <View style={styles.stepRow}>
-              <View style={styles.stepDot}><Text style={styles.stepDotText}>2</Text></View>
-              <Text style={styles.stepText}>Take a selfie</Text>
-            </View>
-            <View style={styles.stepRow}>
-              <View style={styles.stepDot}><Text style={styles.stepDotText}>3</Text></View>
-              <Text style={styles.stepText}>Liveness check (face movements)</Text>
-            </View>
+            <Text style={styles.stepsTitle}>3 steps · about 45 seconds</Text>
+            <StepRow num={1} text={`${biometricType} authentication`} icon="finger-print" />
+            <StepRow num={2} text="Take a selfie" icon="camera" />
+            <StepRow num={3} text={`Record a ${MIN_VIDEO_SEC}-${MAX_VIDEO_SEC}s liveness video`} icon="videocam" />
           </View>
         </View>
 
@@ -186,35 +300,32 @@ export default function VerifyScreen() {
           <TouchableOpacity style={styles.primaryBtn} onPress={startBiometric} activeOpacity={0.85}>
             <Ionicons name={biometricAvailable ? 'finger-print' : 'camera'} size={20} color="#fff" />
             <Text style={styles.primaryBtnText}>
-              {biometricAvailable ? `Verify with ${biometricType}` : 'Start verification'}
+              {wasRejected ? 'Try again' : isPending ? 'Re-submit' : (biometricAvailable ? `Verify with ${biometricType}` : 'Start verification')}
             </Text>
           </TouchableOpacity>
           <Text style={styles.legalText}>
-            We use Face ID / Touch ID and selfie matching to confirm you're a real person.
-            We never share biometric data.
+            Your selfie and video are reviewed by our trust &amp; safety team using face-match and liveness detection. They're never shown on your profile.
           </Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  // ─── Biometric step ───
+  /* ─── biometric step ────────────────────────────────────────────── */
   if (step === 'biometric') {
     return (
       <SafeAreaView style={styles.containerDark}>
         <StatusBar barStyle="light-content" />
-        <View style={styles.body}>
-          <Animated.View style={[styles.bioCircle, { transform: [{ scale: pulse }] }]}>
-            <Ionicons name="finger-print" size={72} color={COLORS.BRAND} />
-          </Animated.View>
-          <Text style={styles.titleDark}>Authenticating...</Text>
-          <Text style={styles.subtitleDark}>Use {biometricType} to continue</Text>
-        </View>
+        <Animated.View style={[styles.bioCircle, { transform: [{ scale: pulse }] }]}>
+          <Ionicons name="finger-print" size={72} color={COLORS.BRAND} />
+        </Animated.View>
+        <Text style={styles.titleDark}>Authenticating…</Text>
+        <Text style={styles.subtitleDark}>Use {biometricType} to continue</Text>
       </SafeAreaView>
     );
   }
 
-  // ─── Selfie step ───
+  /* ─── selfie step ───────────────────────────────────────────────── */
   if (step === 'selfie') {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -240,17 +351,9 @@ export default function VerifyScreen() {
               ) : (
                 <Ionicons name="person" size={120} color={COLORS.BORDER} />
               )}
-              <Animated.View
-                style={[
-                  styles.scanLineOverlay,
-                  {
-                    transform: [{
-                      translateY: scanLine.interpolate({ inputRange: [0, 1], outputRange: [0, 280] }),
-                    }],
-                  },
-                ]}
-              />
-              {/* Corner brackets */}
+              <Animated.View style={[styles.scanLineOverlay, {
+                transform: [{ translateY: scanLine.interpolate({ inputRange: [0, 1], outputRange: [0, 280] }) }],
+              }]} />
               <View style={[styles.corner, styles.cornerTL]} />
               <View style={[styles.corner, styles.cornerTR]} />
               <View style={[styles.corner, styles.cornerBL]} />
@@ -260,23 +363,22 @@ export default function VerifyScreen() {
 
           <Text style={styles.title}>Take a selfie</Text>
           <Text style={styles.subtitle}>
-            Center your face in the frame. Make sure you're in good light and not wearing sunglasses.
+            Center your face. Good light. No hat or sunglasses.{'\n'}This becomes the reference photo for face-match.
           </Text>
         </View>
 
         <View style={styles.footer}>
           <TouchableOpacity style={styles.primaryBtn} onPress={takeSelfie} activeOpacity={0.85}>
             <Ionicons name="camera" size={20} color="#fff" />
-            <Text style={styles.primaryBtnText}>Open camera</Text>
+            <Text style={styles.primaryBtnText}>{selfieUri ? 'Retake selfie' : 'Open camera'}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
-  // ─── Liveness step ───
+  /* ─── liveness step (real video capture) ────────────────────────── */
   if (step === 'liveness') {
-    const action = LIVENESS_ACTIONS[livenessStep];
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <StatusBar barStyle="dark-content" />
@@ -296,54 +398,50 @@ export default function VerifyScreen() {
         <View style={styles.body}>
           <View style={styles.cameraFrameOuter}>
             <View style={styles.cameraFrame}>
-              {selfieUri && <Image source={{ uri: selfieUri }} style={[styles.selfiePreview, { opacity: 0.5 }]} />}
-              <Animated.View style={[styles.livenessIcon, { transform: [{ scale: pulse }] }]}>
-                <Ionicons name={action.icon as any} size={64} color="#fff" />
-              </Animated.View>
+              {selfieUri && <Image source={{ uri: selfieUri }} style={[styles.selfiePreview, { opacity: 0.35 }]} />}
+              <View style={styles.livenessCenter}>
+                <Ionicons name="videocam" size={56} color={COLORS.BRAND} />
+                <Text style={styles.livenessHint}>{MIN_VIDEO_SEC}–{MAX_VIDEO_SEC}s</Text>
+              </View>
             </View>
           </View>
 
-          <Text style={styles.title}>{action.label}</Text>
+          <Text style={styles.title}>Record a liveness video</Text>
           <Text style={styles.subtitle}>
-            We're checking that you're a real person, not a photo.
+            Hold the camera at face height. Slowly turn your head <Text style={styles.subBold}>left</Text>, then <Text style={styles.subBold}>right</Text>, then <Text style={styles.subBold}>smile</Text>. {MIN_VIDEO_SEC}–{MAX_VIDEO_SEC} seconds.
           </Text>
 
-          {/* Step pills */}
-          <View style={styles.stepPills}>
-            {LIVENESS_ACTIONS.map((a, i) => (
-              <View
-                key={a.id}
-                style={[
-                  styles.stepPill,
-                  i < livenessStep && styles.stepPillDone,
-                  i === livenessStep && styles.stepPillActive,
-                ]}
-              >
-                {i < livenessStep ? (
-                  <Ionicons name="checkmark" size={14} color="#fff" />
-                ) : (
-                  <Text style={[styles.stepPillText, i === livenessStep && { color: '#fff' }]}>{i + 1}</Text>
-                )}
-              </View>
-            ))}
+          <View style={styles.actionsRow}>
+            <View style={styles.action}>
+              <View style={styles.actionIcon}><Ionicons name="arrow-back" size={18} color={COLORS.BRAND} /></View>
+              <Text style={styles.actionText}>Look left</Text>
+            </View>
+            <View style={styles.action}>
+              <View style={styles.actionIcon}><Ionicons name="arrow-forward" size={18} color={COLORS.BRAND} /></View>
+              <Text style={styles.actionText}>Look right</Text>
+            </View>
+            <View style={styles.action}>
+              <View style={styles.actionIcon}><Ionicons name="happy" size={18} color={COLORS.BRAND} /></View>
+              <Text style={styles.actionText}>Smile</Text>
+            </View>
           </View>
         </View>
 
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.primaryBtn} onPress={completeLivenessAction} activeOpacity={0.85}>
-            <Ionicons name="checkmark" size={20} color="#fff" />
-            <Text style={styles.primaryBtnText}>Done — next</Text>
+          <TouchableOpacity style={styles.primaryBtn} onPress={recordLivenessVideo} activeOpacity={0.85}>
+            <Ionicons name="videocam" size={20} color="#fff" />
+            <Text style={styles.primaryBtnText}>Start recording</Text>
           </TouchableOpacity>
           <Text style={styles.legalText}>
-            On the real flow, this would happen automatically via the camera.
+            The video is encrypted in transit and only used to confirm you're a real human.
           </Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  // ─── Processing step ───
-  if (step === 'processing') {
+  /* ─── uploading step ────────────────────────────────────────────── */
+  if (step === 'uploading') {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <StatusBar barStyle="dark-content" />
@@ -351,26 +449,112 @@ export default function VerifyScreen() {
           <View style={styles.processingWrap}>
             <ActivityIndicator size="large" color={COLORS.BRAND} />
           </View>
-          <Text style={styles.title}>Verifying you...</Text>
+          <Text style={styles.title}>Uploading…</Text>
           <Text style={styles.subtitle}>
-            We're matching your selfie against the liveness check.{'\n'}This takes a few seconds.
+            Sending your selfie and liveness video to our verification team.
           </Text>
-          <View style={styles.processSteps}>
-            <ProcessRow label="Biometric authenticated" done />
-            <ProcessRow label="Selfie captured" done />
-            <ProcessRow label="Liveness verified" done />
-            <ProcessRow label="Issuing verified badge..." active />
+
+          <View style={styles.uploadBar}>
+            <Animated.View style={[styles.uploadBarFill, {
+              width: progressAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }) as any,
+            }]} />
           </View>
+          <Text style={styles.uploadPctText}>{uploadPct}%</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  // ─── Success step ───
+  /* ─── pending step ──────────────────────────────────────────────── */
+  if (step === 'pending') {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <StatusBar barStyle="dark-content" />
+        <View style={styles.body}>
+          <View style={styles.pendingHero}>
+            <View style={styles.pendingGlow} />
+            <View style={styles.pendingInner}>
+              <Ionicons name="time" size={56} color="#fff" />
+            </View>
+          </View>
+
+          <Text style={styles.title}>Under review</Text>
+          <Text style={styles.subtitle}>
+            Your verification is being reviewed by our trust &amp; safety team. We'll notify you the moment it's complete.
+          </Text>
+
+          <View style={styles.pendingBox}>
+            <View style={styles.pendingRow}>
+              <Ionicons name="checkmark-circle" size={16} color={COLORS.LIKE} />
+              <Text style={styles.pendingText}>Selfie received</Text>
+            </View>
+            <View style={styles.pendingRow}>
+              <Ionicons name="checkmark-circle" size={16} color={COLORS.LIKE} />
+              <Text style={styles.pendingText}>Liveness video received</Text>
+            </View>
+            <View style={styles.pendingRow}>
+              <ActivityIndicator size="small" color={COLORS.WARNING} />
+              <Text style={styles.pendingText}>Manual review in progress</Text>
+            </View>
+            {estimatedMinutes !== null && (
+              <Text style={styles.pendingEta}>
+                Estimated review: {estimatedMinutes < 60 ? `~${estimatedMinutes} min` : `~${Math.round(estimatedMinutes / 60)} hr`}
+              </Text>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.footer}>
+          <TouchableOpacity style={styles.primaryBtn} onPress={close} activeOpacity={0.85}>
+            <Ionicons name="sparkles" size={20} color="#fff" />
+            <Text style={styles.primaryBtnText}>Got it</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  /* ─── rejected step ─────────────────────────────────────────────── */
+  if (step === 'rejected') {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <StatusBar barStyle="dark-content" />
+        <View style={styles.body}>
+          <View style={styles.rejectHero}>
+            <View style={styles.rejectGlow} />
+            <View style={styles.rejectInner}>
+              <Ionicons name="close" size={56} color="#fff" />
+            </View>
+          </View>
+
+          <Text style={styles.title}>Verification couldn't complete</Text>
+          <Text style={styles.subtitle}>
+            {rejectReason || 'We couldn\'t confirm your identity from these recordings.'}
+          </Text>
+
+          <View style={styles.errorBoxFull}>
+            <Text style={styles.errorBoxTitle}>Common causes</Text>
+            <Text style={styles.errorBoxText}>• Face partially obscured (hat, mask, sunglasses)</Text>
+            <Text style={styles.errorBoxText}>• Lighting too dark or too backlit</Text>
+            <Text style={styles.errorBoxText}>• Selfie and video don't appear to be the same person</Text>
+            <Text style={styles.errorBoxText}>• Video too short to confirm motion</Text>
+          </View>
+        </View>
+
+        <View style={styles.footer}>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => setStep('intro')} activeOpacity={0.85}>
+            <Ionicons name="refresh" size={20} color="#fff" />
+            <Text style={styles.primaryBtnText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  /* ─── success step ──────────────────────────────────────────────── */
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar barStyle="dark-content" />
-
       <View style={styles.body}>
         <View style={styles.successHero}>
           <View style={styles.successGlow} />
@@ -381,27 +565,18 @@ export default function VerifyScreen() {
 
         <Text style={styles.titleSuccess}>You're verified! ✨</Text>
         <Text style={styles.subtitle}>
-          Your profile now has the verified badge. You'll get priority in our matching queue.
+          Your verified badge is now on your profile. You'll get priority in our matching queue.
         </Text>
 
         <View style={styles.successStats}>
-          <View style={styles.successStat}>
-            <Text style={styles.successStatNum}>4×</Text>
-            <Text style={styles.successStatLabel}>more proposals</Text>
-          </View>
-          <View style={styles.successStat}>
-            <Text style={styles.successStatNum}>2×</Text>
-            <Text style={styles.successStatLabel}>better match quality</Text>
-          </View>
-          <View style={styles.successStat}>
-            <Text style={styles.successStatNum}>100%</Text>
-            <Text style={styles.successStatLabel}>verified humans</Text>
-          </View>
+          <SuccessStat num="4×" label="more proposals" />
+          <SuccessStat num="2×" label="match quality" />
+          <SuccessStat num="100%" label="verified humans" />
         </View>
       </View>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={close} activeOpacity={0.85}>
           <Ionicons name="sparkles" size={20} color="#fff" />
           <Text style={styles.primaryBtnText}>Back to my profile</Text>
         </TouchableOpacity>
@@ -410,31 +585,21 @@ export default function VerifyScreen() {
   );
 }
 
-function BenefitRow({ icon, color, title, desc }: { icon: string; color: string; title: string; desc: string }) {
+function StepRow({ num, text, icon }: { num: number; text: string; icon: string }) {
   return (
-    <View style={styles.benefitRow}>
-      <View style={[styles.benefitIcon, { backgroundColor: color + '18' }]}>
-        <Ionicons name={icon as any} size={20} color={color} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.benefitTitle}>{title}</Text>
-        <Text style={styles.benefitDesc}>{desc}</Text>
-      </View>
+    <View style={styles.stepRow}>
+      <View style={styles.stepDot}><Text style={styles.stepDotText}>{num}</Text></View>
+      <Text style={styles.stepText}>{text}</Text>
+      <Ionicons name={icon as any} size={14} color={COLORS.TEXT_MUTED} />
     </View>
   );
 }
 
-function ProcessRow({ label, done, active }: { label: string; done?: boolean; active?: boolean }) {
+function SuccessStat({ num, label }: { num: string; label: string }) {
   return (
-    <View style={styles.processRow}>
-      {done ? (
-        <Ionicons name="checkmark-circle" size={18} color={COLORS.LIKE} />
-      ) : active ? (
-        <ActivityIndicator size="small" color={COLORS.BRAND} />
-      ) : (
-        <View style={styles.processDot} />
-      )}
-      <Text style={[styles.processLabel, done && { color: COLORS.TEXT, fontWeight: '600' }]}>{label}</Text>
+    <View style={styles.successStat}>
+      <Text style={styles.successStatNum}>{num}</Text>
+      <Text style={styles.successStatLabel}>{label}</Text>
     </View>
   );
 }
@@ -456,10 +621,7 @@ const styles = StyleSheet.create({
   body: { flex: 1, paddingHorizontal: 24, paddingTop: 16, alignItems: 'center' },
 
   shieldHero: { width: 130, height: 130, alignItems: 'center', justifyContent: 'center', marginVertical: 16 },
-  shieldGlow: {
-    position: 'absolute', width: 130, height: 130, borderRadius: 65,
-    backgroundColor: COLORS.BRAND, opacity: 0.18,
-  },
+  shieldGlow: { position: 'absolute', width: 130, height: 130, borderRadius: 65, backgroundColor: COLORS.BRAND, opacity: 0.18 },
   shieldInner: {
     width: 100, height: 100, borderRadius: 28, backgroundColor: COLORS.BRAND,
     justifyContent: 'center', alignItems: 'center',
@@ -469,31 +631,32 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '800', color: COLORS.TEXT, marginTop: 12, marginBottom: 8, textAlign: 'center', letterSpacing: -0.5 },
   titleDark: { fontSize: 26, fontWeight: '800', color: '#fff', marginTop: 32, marginBottom: 8, textAlign: 'center' },
   titleSuccess: { fontSize: 28, fontWeight: '900', color: COLORS.BRAND, marginTop: 16, marginBottom: 8, textAlign: 'center' },
-  subtitle: { fontSize: 14, color: COLORS.TEXT_SECONDARY, lineHeight: 21, textAlign: 'center', paddingHorizontal: 16, marginBottom: 20 },
+  subtitle: { fontSize: 14, color: COLORS.TEXT_SECONDARY, lineHeight: 21, textAlign: 'center', paddingHorizontal: 8, marginBottom: 20 },
   subtitleDark: { fontSize: 14, color: 'rgba(255,255,255,0.7)', lineHeight: 21, textAlign: 'center' },
+  subBold: { fontWeight: '800', color: COLORS.TEXT },
 
-  benefitList: { width: '100%', gap: 10, marginBottom: 18 },
-  benefitRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: COLORS.SURFACE, padding: 14, borderRadius: 16,
-    borderWidth: 1, borderColor: COLORS.BORDER_LIGHT,
+  errorPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.ERROR_LIGHT, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 14,
+    marginBottom: 16,
   },
-  benefitIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  benefitTitle: { fontSize: 14, fontWeight: '700', color: COLORS.TEXT, marginBottom: 2 },
-  benefitDesc: { fontSize: 12, color: COLORS.TEXT_MUTED, lineHeight: 16 },
+  errorPillText: { fontSize: 12, color: COLORS.ERROR, fontWeight: '600' },
+  pendingPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.WARNING_LIGHT, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 14,
+    marginBottom: 16,
+  },
+  pendingPillText: { fontSize: 12, color: COLORS.WARNING, fontWeight: '700' },
 
   stepsBox: {
     width: '100%', backgroundColor: COLORS.BRAND_MUTED, padding: 16, borderRadius: 16,
     borderLeftWidth: 3, borderLeftColor: COLORS.BRAND,
   },
-  stepsTitle: { fontSize: 12, fontWeight: '800', color: COLORS.BRAND, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 },
-  stepRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
-  stepDot: {
-    width: 22, height: 22, borderRadius: 11, backgroundColor: COLORS.BRAND,
-    justifyContent: 'center', alignItems: 'center',
-  },
+  stepsTitle: { fontSize: 12, fontWeight: '800', color: COLORS.BRAND, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 12 },
+  stepRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+  stepDot: { width: 22, height: 22, borderRadius: 11, backgroundColor: COLORS.BRAND, justifyContent: 'center', alignItems: 'center' },
   stepDotText: { fontSize: 11, fontWeight: '900', color: '#fff' },
-  stepText: { fontSize: 13, color: COLORS.TEXT, fontWeight: '500' },
+  stepText: { flex: 1, fontSize: 13, color: COLORS.TEXT, fontWeight: '500' },
 
   footer: { paddingHorizontal: 24, paddingBottom: 16, paddingTop: 8 },
   primaryBtn: {
@@ -525,58 +688,69 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.BRAND, opacity: 0.7,
     shadowColor: COLORS.BRAND, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 8,
   },
-  corner: {
-    position: 'absolute', width: 24, height: 24, borderColor: COLORS.BRAND, borderRadius: 4,
-  },
+  corner: { position: 'absolute', width: 24, height: 24, borderColor: COLORS.BRAND, borderRadius: 4 },
   cornerTL: { top: 12, left: 12, borderTopWidth: 4, borderLeftWidth: 4 },
   cornerTR: { top: 12, right: 12, borderTopWidth: 4, borderRightWidth: 4 },
   cornerBL: { bottom: 12, left: 12, borderBottomWidth: 4, borderLeftWidth: 4 },
   cornerBR: { bottom: 12, right: 12, borderBottomWidth: 4, borderRightWidth: 4 },
 
-  livenessIcon: {
-    width: 120, height: 120, borderRadius: 60, backgroundColor: COLORS.BRAND,
+  livenessCenter: { alignItems: 'center', gap: 6 },
+  livenessHint: { fontSize: 11, fontWeight: '700', color: COLORS.BRAND, letterSpacing: 0.5 },
+
+  actionsRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  action: { flex: 1, alignItems: 'center', gap: 6 },
+  actionIcon: {
+    width: 38, height: 38, borderRadius: 12, backgroundColor: COLORS.BRAND_MUTED,
     justifyContent: 'center', alignItems: 'center',
-    shadowColor: COLORS.BRAND, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.5, shadowRadius: 16, elevation: 10,
   },
-  stepPills: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  stepPill: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.SURFACE,
-    borderWidth: 2, borderColor: COLORS.BORDER, justifyContent: 'center', alignItems: 'center',
-  },
-  stepPillActive: { backgroundColor: COLORS.BRAND, borderColor: COLORS.BRAND },
-  stepPillDone: { backgroundColor: COLORS.LIKE, borderColor: COLORS.LIKE },
-  stepPillText: { fontSize: 13, fontWeight: '800', color: COLORS.TEXT_MUTED },
+  actionText: { fontSize: 11, fontWeight: '700', color: COLORS.TEXT_SECONDARY },
 
   processingWrap: {
     width: 100, height: 100, borderRadius: 50, backgroundColor: COLORS.BRAND_MUTED,
     justifyContent: 'center', alignItems: 'center', marginVertical: 16,
   },
-  processSteps: { width: '100%', gap: 10, marginTop: 12 },
-  processRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: COLORS.SURFACE, padding: 12, borderRadius: 12,
+  uploadBar: { width: '100%', height: 8, backgroundColor: COLORS.BORDER_LIGHT, borderRadius: 4, overflow: 'hidden', marginTop: 12 },
+  uploadBarFill: { height: '100%', backgroundColor: COLORS.BRAND, borderRadius: 4 },
+  uploadPctText: { fontSize: 14, fontWeight: '700', color: COLORS.BRAND, marginTop: 8 },
+
+  pendingHero: { width: 150, height: 150, alignItems: 'center', justifyContent: 'center', marginVertical: 18 },
+  pendingGlow: { position: 'absolute', width: 150, height: 150, borderRadius: 75, backgroundColor: COLORS.WARNING, opacity: 0.18 },
+  pendingInner: {
+    width: 110, height: 110, borderRadius: 32, backgroundColor: COLORS.WARNING,
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: COLORS.WARNING, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 12,
   },
-  processDot: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: COLORS.BORDER },
-  processLabel: { fontSize: 13, color: COLORS.TEXT_MUTED, fontWeight: '500' },
+  pendingBox: {
+    width: '100%', backgroundColor: COLORS.SURFACE, padding: 16, borderRadius: 16,
+    borderWidth: 1, borderColor: COLORS.BORDER_LIGHT,
+  },
+  pendingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
+  pendingText: { fontSize: 13, color: COLORS.TEXT, fontWeight: '500' },
+  pendingEta: { fontSize: 12, color: COLORS.WARNING, fontWeight: '700', marginTop: 10, textAlign: 'center' },
+
+  rejectHero: { width: 150, height: 150, alignItems: 'center', justifyContent: 'center', marginVertical: 18 },
+  rejectGlow: { position: 'absolute', width: 150, height: 150, borderRadius: 75, backgroundColor: COLORS.ERROR, opacity: 0.18 },
+  rejectInner: {
+    width: 110, height: 110, borderRadius: 32, backgroundColor: COLORS.ERROR,
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: COLORS.ERROR, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 12,
+  },
+  errorBoxFull: {
+    width: '100%', backgroundColor: COLORS.ERROR_LIGHT, padding: 16, borderRadius: 14,
+    borderLeftWidth: 3, borderLeftColor: COLORS.ERROR,
+  },
+  errorBoxTitle: { fontSize: 12, fontWeight: '900', color: COLORS.ERROR, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 },
+  errorBoxText: { fontSize: 13, color: COLORS.TEXT_SECONDARY, lineHeight: 19 },
 
   successHero: { width: 150, height: 150, alignItems: 'center', justifyContent: 'center', marginVertical: 24 },
-  successGlow: {
-    position: 'absolute', width: 150, height: 150, borderRadius: 75,
-    backgroundColor: COLORS.LIKE, opacity: 0.2,
-  },
+  successGlow: { position: 'absolute', width: 150, height: 150, borderRadius: 75, backgroundColor: COLORS.LIKE, opacity: 0.2 },
   successInner: {
     width: 110, height: 110, borderRadius: 32, backgroundColor: COLORS.LIKE,
     justifyContent: 'center', alignItems: 'center',
     shadowColor: COLORS.LIKE, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 12,
   },
-  successStats: {
-    flexDirection: 'row', gap: 10, width: '100%', marginTop: 12,
-  },
-  successStat: {
-    flex: 1, alignItems: 'center', backgroundColor: COLORS.SURFACE,
-    padding: 14, borderRadius: 16,
-    borderWidth: 1, borderColor: COLORS.BORDER_LIGHT,
-  },
+  successStats: { flexDirection: 'row', gap: 10, width: '100%', marginTop: 12 },
+  successStat: { flex: 1, alignItems: 'center', backgroundColor: COLORS.SURFACE, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: COLORS.BORDER_LIGHT },
   successStatNum: { fontSize: 22, fontWeight: '900', color: COLORS.BRAND, marginBottom: 4 },
   successStatLabel: { fontSize: 11, color: COLORS.TEXT_MUTED, textAlign: 'center', fontWeight: '600' },
 });

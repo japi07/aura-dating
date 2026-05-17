@@ -15,8 +15,15 @@ export interface User {
   gender?: string;
   genderInterest?: string;
   photoUrl?: string;
+  /** Set when the user passes the full verification flow */
   verified?: boolean;
   verifiedAt?: string;
+  /** Tracks the current verification state across the lifecycle */
+  verificationStatus?: 'unverified' | 'submitting' | 'pending' | 'verified' | 'rejected';
+  /** Server-issued ID of the most recent verification submission */
+  verificationId?: string;
+  /** Rejection reason if verification was declined */
+  verificationReason?: string;
 }
 
 interface AuthStore {
