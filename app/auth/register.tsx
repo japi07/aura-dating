@@ -9,6 +9,9 @@ import * as Haptics from 'expo-haptics';
 import { useAuthStore, type User } from '@/store/auth';
 import { useUsersStore } from '@/store/users';
 import { authApi } from '@/lib/api';
+import { signUpWithEmail, signInWithApple } from '@/lib/auth-supabase';
+import { supabaseEnabled } from '@/lib/supabase';
+import { AppleSignInButton } from '@/components/AppleSignInButton';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { InterestTag } from '@/components/InterestTag';
@@ -61,12 +64,49 @@ export default function RegisterScreen() {
 
   const validateStep2 = () => {
     const e: Record<string, string> = {};
-    if (!birthday.trim()) e.birthday = 'Birthday is required';
+    if (!birthday.trim()) {
+      e.birthday = 'Birthday is required';
+    } else {
+      // Real 18+ enforcement — Apple requires this for dating apps
+      const age = computeAgeForValidation(birthday);
+      if (age === null) {
+        e.birthday = 'Please enter a valid date (MM/DD/YYYY)';
+      } else if (age < 18) {
+        e.birthday = 'You must be 18 or older to use Aura';
+      } else if (age > 120) {
+        e.birthday = 'Please enter a valid birthday';
+      }
+    }
     if (!gender) e.gender = 'Please select your gender';
     if (!genderInterest) e.genderInterest = 'Please select gender preference';
     if (!city.trim()) e.city = 'City is required';
     setErrors(e);
     return Object.keys(e).length === 0;
+  };
+
+  /** Returns age in years, or null if the input is not parseable */
+  const computeAgeForValidation = (str: string): number | null => {
+    const trimmed = str.trim();
+    // Accept both MM/DD/YYYY (US) and DD/MM/YYYY — try MM/DD/YYYY first
+    let d: Date | null = null;
+    const slash = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(trimmed);
+    if (slash) {
+      const a = parseInt(slash[1], 10);
+      const b = parseInt(slash[2], 10);
+      const year = parseInt(slash[3], 10);
+      // If first part > 12 it must be DD/MM/YYYY; otherwise treat as MM/DD/YYYY
+      if (a > 12) d = new Date(year, b - 1, a);
+      else d = new Date(year, a - 1, b);
+    } else {
+      const parsed = new Date(trimmed);
+      if (!isNaN(parsed.getTime())) d = parsed;
+    }
+    if (!d || isNaN(d.getTime())) return null;
+    const now = new Date();
+    let age = now.getFullYear() - d.getFullYear();
+    const m = now.getMonth() - d.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+    return age;
   };
 
   const validateStep3 = () => {
@@ -141,6 +181,27 @@ export default function RegisterScreen() {
       genderInterest: genderInterest.toLowerCase(),
       photoUrl: photoUri || `https://i.pravatar.cc/400?u=${encodeURIComponent(email)}`,
     };
+
+    // Prefer Supabase when configured
+    if (supabaseEnabled) {
+      try {
+        const { user, token } = await signUpWithEmail({
+          email, password, name, birthday, city, gender, genderInterest, bio,
+          interests: selectedInterests, photoUrl: photoUri || undefined,
+        });
+        await setToken(token);
+        setUser(user);
+        await upsertUser(user);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        router.replace('/');
+        return;
+      } catch (e: any) {
+        // If Supabase rejects (e.g. weak password, duplicate email), surface it
+        Alert.alert('Registration failed', e?.message || 'Please check your details and try again.');
+        setLoading(false);
+        return;
+      }
+    }
 
     try {
       const response = await authApi.register({
@@ -226,6 +287,31 @@ export default function RegisterScreen() {
             <Input label="Email" placeholder="your@email.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" error={errors.email} icon="mail-outline" />
             <Input label="Password" placeholder="Create a password" value={password} onChangeText={setPassword} secureTextEntry error={errors.password} icon="lock-closed-outline" />
             <Input label="Confirm Password" placeholder="Confirm your password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry error={errors.confirmPassword} icon="lock-closed-outline" />
+
+            {/* Apple Sign-In (iOS only; required by Apple if any other social option exists) */}
+            <View style={{ marginTop: 14 }}>
+              <AppleSignInButton
+                onSuccess={async (cred) => {
+                  setLoading(true);
+                  try {
+                    const { user, token } = await signInWithApple({
+                      identityToken: cred.identityToken!,
+                      fullName: cred.fullName,
+                      email: cred.email,
+                    });
+                    await setToken(token);
+                    setUser(user);
+                    await upsertUser(user);
+                    router.replace('/');
+                  } catch (e: any) {
+                    Alert.alert('Apple sign-in failed', e?.message || 'Please try again.');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                onError={(e) => Alert.alert('Apple sign-in failed', e?.message || 'Please try again.')}
+              />
+            </View>
           </View>
         )}
 

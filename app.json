@@ -18,11 +18,13 @@
     "ios": {
       "supportsTabletMode": false,
       "bundleIdentifier": "com.auradating.app",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "UIRequiredDeviceCapabilities": [
           "portrait"
         ],
-        "NSCameraUsageDescription": "Aura uses your camera for the verified-human selfie check.",
+        "NSCameraUsageDescription": "Aura uses your camera for the verified-human selfie check and your video introductions.",
+        "NSMicrophoneUsageDescription": "Aura records audio for your video introduction and liveness video.",
         "NSPhotoLibraryUsageDescription": "Aura needs photo access so you can upload profile pictures.",
         "NSPhotoLibraryAddOnlyUsageDescription": "Aura saves photos to your library when you ask.",
         "NSLocationWhenInUseUsageDescription": "Aura uses your location to show real walking distance to your matches and venues.",
@@ -99,7 +101,15 @@
         {
           "faceIDPermission": "Aura uses Face ID to verify you're a real human."
         }
-      ]
-    ]
+      ],
+      "expo-apple-authentication"
+    ],
+    "extra": {
+      "supabaseUrl": "PASTE_YOUR_SUPABASE_PROJECT_URL_HERE",
+      "supabaseAnonKey": "PASTE_YOUR_SUPABASE_ANON_PUBLIC_KEY_HERE",
+      "eas": {
+        "projectId": "PASTE_YOUR_EAS_PROJECT_ID_HERE"
+      }
+    }
   }
 }

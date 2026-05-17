@@ -7,6 +7,9 @@ import {
 import { Link, useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/auth';
 import { authApi } from '@/lib/api';
+import { signInWithEmail, signInWithApple } from '@/lib/auth-supabase';
+import { supabaseEnabled } from '@/lib/supabase';
+import { AppleSignInButton } from '@/components/AppleSignInButton';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
 
@@ -37,6 +40,15 @@ export default function LoginScreen() {
     if (!validate()) return;
     setLoading(true);
     try {
+      // Prefer Supabase if configured; otherwise fall back to the legacy
+      // axios-based authApi (which then falls back to local-only mode).
+      if (supabaseEnabled) {
+        const { user, token } = await signInWithEmail(email, password);
+        await setToken(token);
+        setUser(user);
+        router.replace('/');
+        return;
+      }
       const res = await authApi.login(email, password);
       await setToken(res.token);
       setUser({ id: res.user.id, email: res.user.email, name: res.user.name, profileComplete: res.user.profileComplete, age: res.user.age, city: res.user.city, bio: res.user.bio, interests: res.user.interests, gender: res.user.gender, genderInterest: res.user.genderInterest, photoUrl: res.user.photoUrl });
@@ -151,6 +163,33 @@ export default function LoginScreen() {
             </>
           )}
         </TouchableOpacity>
+
+        {/* Apple Sign-In — required by Apple if any social login is offered */}
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>or</Text>
+          <View style={styles.dividerLine} />
+        </View>
+        <AppleSignInButton
+          onSuccess={async (cred) => {
+            setLoading(true);
+            try {
+              const { user, token } = await signInWithApple({
+                identityToken: cred.identityToken!,
+                fullName: cred.fullName,
+                email: cred.email,
+              });
+              await setToken(token);
+              setUser(user);
+              router.replace('/');
+            } catch (e: any) {
+              Alert.alert('Apple sign-in failed', e?.message || 'Please try again.');
+            } finally {
+              setLoading(false);
+            }
+          }}
+          onError={(e) => Alert.alert('Apple sign-in failed', e?.message || 'Please try again.')}
+        />
 
         {/* Register link */}
         <View style={styles.registerRow}>
