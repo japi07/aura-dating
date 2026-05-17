@@ -8,11 +8,10 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '@/constants/colors';
+import { useIntroStore } from '@/store/intro';
 
 const { width: SW, height: SH } = Dimensions.get('window');
-export const HAS_SEEN_INTRO_KEY = 'aura.hasSeenIntro.v1';
 
 interface Slide {
   id: string;
@@ -66,6 +65,7 @@ const SLIDES: Slide[] = [
 
 export default function IntroScreen() {
   const router = useRouter();
+  const markSeen = useIntroStore((s) => s.markSeen);
   const flatRef = useRef<FlatList<Slide>>(null);
   const [index, setIndex] = useState(0);
   const fade = useRef(new Animated.Value(0)).current;
@@ -96,13 +96,15 @@ export default function IntroScreen() {
 
   const finish = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    try { await AsyncStorage.setItem(HAS_SEEN_INTRO_KEY, '1'); } catch {}
+    // Mark in the reactive store first so the redirect prop on the auth
+    // route updates this tick — then navigate.
+    await markSeen();
     router.replace('/auth/register');
   };
 
   const skip = async () => {
     Haptics.selectionAsync().catch(() => {});
-    try { await AsyncStorage.setItem(HAS_SEEN_INTRO_KEY, '1'); } catch {}
+    await markSeen();
     router.replace('/auth/login');
   };
 

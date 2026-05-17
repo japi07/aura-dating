@@ -2,18 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '@/store/auth';
 import { useProposalsStore } from '@/store/proposals';
 import { useDatesStore } from '@/store/dates';
 import { useSettingsStore } from '@/store/settings';
 import { useUsersStore } from '@/store/users';
+import { useIntroStore } from '@/store/intro';
 import { COLORS } from '@/constants/colors';
 import {
   registerForPushNotifications,
   scheduleDailyProposalReminder,
 } from '@/lib/notifications';
-import { HAS_SEEN_INTRO_KEY } from './intro';
 
 export default function RootLayout() {
   const { token, user, hydrate } = useAuthStore();
@@ -22,21 +21,21 @@ export default function RootLayout() {
   const hydrateSettings = useSettingsStore((s) => s.hydrate);
   const hydrateUsers = useUsersStore((s) => s.hydrate);
   const upsertUser = useUsersStore((s) => s.upsertUser);
+  // Pull the reactive intro flag so this component re-renders when it changes.
+  const hasSeenIntro = useIntroStore((s) => s.hasSeenIntro);
+  const hydrateIntro = useIntroStore((s) => s.hydrate);
   const [isReady, setIsReady] = useState(false);
-  // Default to true so the intro doesn't briefly flash for returning users.
-  // Updated from AsyncStorage during boot.
-  const [hasSeenIntro, setHasSeenIntro] = useState(true);
 
   useEffect(() => {
     (async () => {
       await hydrate();
-      await Promise.all([hydrateProposals(), hydrateDates(), hydrateSettings(), hydrateUsers()]);
-      try {
-        const seen = await AsyncStorage.getItem(HAS_SEEN_INTRO_KEY);
-        setHasSeenIntro(seen === '1');
-      } catch {
-        setHasSeenIntro(true);
-      }
+      await Promise.all([
+        hydrateProposals(),
+        hydrateDates(),
+        hydrateSettings(),
+        hydrateUsers(),
+        hydrateIntro(),
+      ]);
       setIsReady(true);
     })();
   }, []);
