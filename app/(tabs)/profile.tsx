@@ -45,9 +45,14 @@ export default function ProfileScreen() {
           // /(tabs) under a stale modal after logout.
           try { (router as any).dismissAll?.(); } catch {}
           await logout();
-          // The auth-store change will trigger the root layout to swap to
-          // /auth automatically; the explicit replace makes the transition
-          // immediate and avoids any lingering tab UI.
+          // Wipe in-memory store state too so the previous user's proposals
+          // / dates don't briefly flash on the next account.
+          try {
+            const { useProposalsStore } = await import('@/store/proposals');
+            const { useDatesStore } = await import('@/store/dates');
+            useProposalsStore.setState({ proposals: [], decisions: {} } as any);
+            useDatesStore.setState({ dates: [] } as any);
+          } catch {}
           router.replace('/auth/login');
         },
       },

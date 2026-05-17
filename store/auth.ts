@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface User {
   id: string;
@@ -71,12 +72,30 @@ export const useAuthStore = create<AuthStore>((set) => ({
   },
 
   logout: async () => {
+    // Clear the user's authentication
     try {
       await SecureStore.deleteItemAsync('authToken');
       await SecureStore.deleteItemAsync('userData');
     } catch (error) {
-      console.error('Failed to delete data during logout:', error);
+      console.error('Failed to delete auth data during logout:', error);
     }
+
+    // Also wipe per-user app state so the next person doesn't inherit
+    // the previous user's proposals, dates, decisions, etc.
+    try {
+      await AsyncStorage.multiRemove([
+        'aura.proposals.v3',
+        'aura.decisions.v3',
+        'aura.proposals.v2',
+        'aura.decisions.v2',
+        'aura.proposals.v1',
+        'aura.decisions.v1',
+        'aura.dates.v1',
+      ]);
+    } catch (error) {
+      console.error('Failed to clear app state during logout:', error);
+    }
+
     set({ token: null, user: null });
   },
 
