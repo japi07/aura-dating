@@ -7,6 +7,8 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/auth';
+import { useProposalsStore } from '@/store/proposals';
+import { useDatesStore } from '@/store/dates';
 import { COLORS } from '@/constants/colors';
 
 const SW = Dimensions.get('window').width;
@@ -48,8 +50,6 @@ export default function ProfileScreen() {
           // Wipe in-memory store state too so the previous user's proposals
           // / dates don't briefly flash on the next account.
           try {
-            const { useProposalsStore } = await import('@/store/proposals');
-            const { useDatesStore } = await import('@/store/dates');
             useProposalsStore.setState({ proposals: [], decisions: {} } as any);
             useDatesStore.setState({ dates: [] } as any);
           } catch {}
