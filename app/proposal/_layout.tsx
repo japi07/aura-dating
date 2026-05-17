@@ -1,15 +1,7 @@
-import React from 'react';
-import { Stack } from 'expo-router';
+import { Slot } from 'expo-router';
 
+// Use Slot so router.back() bubbles up to the root navigator
+// (which actually has history) instead of dying inside a one-screen Stack.
 export default function ProposalLayout() {
-  return (
-    <Stack>
-      <Stack.Screen
-        name="create"
-        options={{
-          headerShown: false,
-        }}
-      />
-    </Stack>
-  );
+  return <Slot />;
 }

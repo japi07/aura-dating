@@ -1,8 +1,6 @@
-import { Stack } from 'expo-router';
-import { COLORS } from '@/constants/colors';
+import { Slot } from 'expo-router';
 
+// Use Slot so router.back() bubbles up to the root navigator.
 export default function ProfileLayout() {
-  return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: COLORS.BG } }} />
-  );
+  return <Slot />;
 }

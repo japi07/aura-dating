@@ -208,7 +208,7 @@ export default function CreateProposalScreen() {
       Alert.alert(
         '✨ Proposal sent',
         `Your video and date plan have been delivered to ${r.name}. They have 24 hours to accept or pass.`,
-        [{ text: 'Done', onPress: () => router.back() }],
+        [{ text: 'Done', onPress: () => (router.canGoBack() ? router.back() : router.replace('/(tabs)')) }],
       );
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to send proposal');
@@ -221,7 +221,7 @@ export default function CreateProposalScreen() {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.backBtn}>
           <Ionicons name="close" size={18} color={COLORS.TEXT} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Propose a Date</Text>
