@@ -105,8 +105,8 @@
       "expo-apple-authentication"
     ],
     "extra": {
-      "supabaseUrl": "PASTE_YOUR_SUPABASE_PROJECT_URL_HERE",
-      "supabaseAnonKey": "PASTE_YOUR_SUPABASE_ANON_PUBLIC_KEY_HERE",
+      "supabaseUrl": "https://krkibouizxurqboyahon.supabase.co",
+      "supabaseAnonKey": "sb_publishable_5I_1U6d_dLezUnWYPNF7xQ_BQAU0w-F",
       "eas": {
         "projectId": "PASTE_YOUR_EAS_PROJECT_ID_HERE"
       }
