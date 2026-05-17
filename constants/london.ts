@@ -62,6 +62,9 @@ export const LONDON_VENUES: Venue[] = [
   { id: 'v_connaught', name: 'Connaught Bar', category: 'drinks', emoji: '🍸', area: 'Mayfair', address: 'Carlos Pl', postcode: 'W1K 2AL', tube: 'Bond Street', priceRange: '££££', lat: 51.5103, lng: -0.1488, description: 'World\'s best bar — book ahead' },
   { id: 'v_callooh', name: 'Callooh Callay', category: 'drinks', emoji: '🍹', area: 'Shoreditch', address: '65 Rivington St', postcode: 'EC2A 3AY', tube: 'Old Street', priceRange: '£££', lat: 51.5255, lng: -0.0795 },
   { id: 'v_tayer', name: 'Tayer + Elementary', category: 'drinks', emoji: '🍸', area: 'Old Street', address: '152 Old St', postcode: 'EC1V 9BW', tube: 'Old Street', priceRange: '£££', lat: 51.5260, lng: -0.0871 },
+  { id: 'v_vagabond_charlotte', name: 'Vagabond Charlotte Street', category: 'drinks', emoji: '🍷', area: 'Fitzrovia', address: '74-77 Charlotte St', postcode: 'W1T 4QH', tube: 'Goodge Street', priceRange: '££', lat: 51.5212, lng: -0.1356, description: 'Self-pour wine bar — try 100+ wines by the glass' },
+  { id: 'v_vagabond_battersea', name: 'Vagabond Battersea Power Station', category: 'drinks', emoji: '🍷', area: 'Battersea', address: 'Circus Rd West, Battersea Power Station', postcode: 'SW11 8DD', tube: 'Battersea Power Station', priceRange: '££', lat: 51.4810, lng: -0.1450, description: 'Self-pour wines with a Power Station view' },
+  { id: 'v_vagabond_holland_park', name: 'Vagabond Holland Park', category: 'drinks', emoji: '🍷', area: 'Holland Park', address: '18-22 Holland Park Ave', postcode: 'W11 3RB', tube: 'Holland Park', priceRange: '££', lat: 51.5081, lng: -0.2052, description: 'Cosy west London branch of the self-pour wine bar' },
 
   // Galleries & culture
   { id: 'v_tate_modern', name: 'Tate Modern', category: 'gallery', emoji: '🎨', area: 'Bankside', address: 'Bankside', postcode: 'SE1 9TG', tube: 'Blackfriars', priceRange: '££', lat: 51.5076, lng: -0.0994 },
