@@ -70,7 +70,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen
-          name="intro"
+          name="intro/index"
           options={{ animation: 'fade' }}
           redirect={isLoggedIn || hasSeenIntro}
         />
@@ -91,7 +91,7 @@ export default function RootLayout() {
         />
         <Stack.Screen name="proposal" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="profile" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="verify" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="verify/index" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="settings/notifications" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="settings/privacy" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="settings/preferences" options={{ animation: 'slide_from_right' }} />
