@@ -10,6 +10,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { User } from './auth';
+import { fetchMembers, getSessionUserId } from '@/lib/proposals-supabase';
 
 const KEY = 'aura.usersDirectory.v1';
 
@@ -32,6 +33,8 @@ interface UsersState {
   users: DirectoryUser[];
   isHydrated: boolean;
   hydrate: () => Promise<void>;
+  /** Pull real members from the backend into the directory */
+  refreshFromServer: () => Promise<void>;
   /** Insert or update a user by email */
   upsertUser: (u: User) => Promise<void>;
   /** Remove from directory by email */
@@ -53,6 +56,37 @@ export const useUsersStore = create<UsersState>((set, get) => ({
       set({ users, isHydrated: true });
     } catch {
       set({ isHydrated: true });
+    }
+    await get().refreshFromServer();
+  },
+
+  refreshFromServer: async () => {
+    try {
+      const uid = await getSessionUserId();
+      if (!uid) return;
+      const members = await fetchMembers();
+      if (!members.length) return;
+      const now = new Date().toISOString();
+      const fromServer: DirectoryUser[] = members.map(m => ({
+        id: m.id,
+        email: m.email.toLowerCase().trim(),
+        name: m.name,
+        age: m.age,
+        city: m.city,
+        bio: m.bio,
+        gender: m.gender?.toLowerCase(),
+        genderInterest: m.genderInterest?.toLowerCase(),
+        photoUrl: m.photoUrl,
+        verified: m.verified,
+        updatedAt: now,
+      }));
+      const serverEmails = new Set(fromServer.map(u => u.email));
+      const localOnly = get().users.filter(u => !serverEmails.has(u.email));
+      const list = [...fromServer, ...localOnly];
+      set({ users: list });
+      await persist(list);
+    } catch {
+      // offline — keep the cached directory
     }
   },
 

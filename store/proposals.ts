@@ -1,11 +1,21 @@
 /**
- * Proposals store — persists per-day proposals received from the matchmaking
- * backend, plus the user's accept/decline state.
- * Backed by AsyncStorage so user state survives app restarts.
+ * Proposals store — server-backed via Supabase, with an AsyncStorage cache
+ * so the last known state is available offline / before the first fetch.
+ *
+ * When Supabase is reachable the server is the source of truth: proposals
+ * are written there, and accept/decline updates the row (a DB trigger turns
+ * an acceptance into a confirmed date). Without a session the store falls
+ * back to the original device-local behaviour so nothing breaks offline.
  */
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Venue } from '@/constants/london';
+import {
+  fetchMyProposals,
+  createProposalOnServer,
+  decideProposalOnServer,
+  getSessionUserId,
+} from '@/lib/proposals-supabase';
 
 // v3 — bumped when we added recipientEmail (mandatory) for cross-account routing.
 // Older cached proposals are wiped on next hydrate.
@@ -22,7 +32,7 @@ export interface ProposalUser {
   verified: boolean;
   lat: number;
   lng: number;
-  /** Sender's email — used to track who sent what for the local routing model */
+  /** Sender's email — used to track who sent what */
   email?: string;
 }
 
@@ -31,7 +41,7 @@ export interface Proposal {
   createdAt: string; // ISO
   expiresAt: string; // ISO
   from: ProposalUser;
-  /** Email of the recipient — used to route proposals between local accounts */
+  /** Email of the recipient — used to route proposals between accounts */
   recipientEmail: string;
   matchScore: number;
   matchReason: string;
@@ -64,7 +74,7 @@ interface ProposalsState {
 
   hydrate: () => Promise<void>;
   refreshProposals: () => Promise<void>;
-  /** Persist a new outgoing proposal — visible to its recipient on this device */
+  /** Create and send a proposal — stored on the server when signed in */
   sendProposal: (p: Omit<Proposal, 'id' | 'createdAt' | 'expiresAt'>) => Promise<Proposal>;
   acceptProposal: (id: string) => Promise<Proposal | null>;
   declineProposal: (id: string) => Promise<void>;
@@ -73,6 +83,19 @@ interface ProposalsState {
   /** Proposals sent by the given email (so the sender can see what's out) */
   sentByUser: (email: string) => Proposal[];
 }
+
+/* ─── helpers ─── */
+
+const persistCache = async (proposals: Proposal[], decisions: Record<string, DecisionRecord>) => {
+  try {
+    await Promise.all([
+      AsyncStorage.setItem(STORAGE_KEY_PROPOSALS, JSON.stringify(proposals)),
+      AsyncStorage.setItem(STORAGE_KEY_DECISIONS, JSON.stringify(decisions)),
+    ]);
+  } catch {
+    // cache write failures are non-fatal
+  }
+};
 
 /* ─── store ─── */
 
@@ -99,25 +122,65 @@ export const useProposalsStore = create<ProposalsState>((set, get) => ({
     } catch (e: any) {
       set({ error: e?.message || 'Failed to load proposals', isHydrated: true });
     }
+    // Then pull the latest truth from the server (no-op when signed out)
+    await get().refreshProposals();
   },
 
   /**
-   * Pulls today's proposals from the matchmaking backend.
-   * In production this calls the API; if no backend is reachable
-   * (offline / no server) the existing local list is kept and the user
-   * sees the appropriate empty / error state.
+   * Pulls my proposals (sent + received) from Supabase and replaces the
+   * local view. Offline or signed out, the cached list is kept as-is.
    */
   refreshProposals: async () => {
     set({ isLoading: true, error: null });
     try {
-      // Real backend would re-fetch here; locally we just clear the loading flag
-      set({ isLoading: false });
+      const uid = await getSessionUserId();
+      if (!uid) {
+        set({ isLoading: false });
+        return;
+      }
+      const rows = await fetchMyProposals();
+      const proposals = rows.map(r => r.proposal);
+      // Reflect server-side decisions so decided proposals leave the inbox
+      const decisions: Record<string, DecisionRecord> = {};
+      for (const r of rows) {
+        if (r.status === 'accepted' || r.status === 'declined' || r.status === 'expired') {
+          decisions[r.proposal.id] = {
+            proposalId: r.proposal.id,
+            decision: r.status as Decision,
+            decidedAt: r.decidedAt ?? r.proposal.createdAt,
+          };
+        }
+      }
+      set({ proposals, decisions, isLoading: false });
+      await persistCache(proposals, decisions);
     } catch (e: any) {
       set({ isLoading: false, error: e?.message || 'Could not refresh' });
     }
   },
 
   sendProposal: async (data) => {
+    const uid = await getSessionUserId();
+
+    if (uid) {
+      // Server path — the recipient's phone will see it on their next refresh
+      const proposal = await createProposalOnServer({
+        recipientEmail: data.recipientEmail,
+        venue: data.venue,
+        startsAt: data.startsAt,
+        payment: data.payment,
+        message: data.message,
+        videoUrl: data.videoUrl,
+        videoDurationSec: data.videoDurationSec,
+        matchScore: data.matchScore,
+        matchReason: data.matchReason,
+      });
+      const next = [proposal, ...get().proposals.filter(p => p.id !== proposal.id)];
+      set({ proposals: next });
+      await persistCache(next, get().decisions);
+      return proposal;
+    }
+
+    // Offline / signed-out fallback: device-local only (original behaviour)
     const proposal: Proposal = {
       ...data,
       id: `prop_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
@@ -126,19 +189,30 @@ export const useProposalsStore = create<ProposalsState>((set, get) => ({
     };
     const next = [proposal, ...get().proposals];
     set({ proposals: next });
-    await AsyncStorage.setItem(STORAGE_KEY_PROPOSALS, JSON.stringify(next));
+    await persistCache(next, get().decisions);
     return proposal;
   },
 
   acceptProposal: async (id: string) => {
     const p = get().proposals.find(x => x.id === id);
     if (!p) return null;
+
+    // Optimistic local decision so the UI responds instantly
     const decisions = {
       ...get().decisions,
       [id]: { proposalId: id, decision: 'accepted' as const, decidedAt: new Date().toISOString() },
     };
     set({ decisions });
-    await AsyncStorage.setItem(STORAGE_KEY_DECISIONS, JSON.stringify(decisions));
+    await persistCache(get().proposals, decisions);
+
+    // Server update — fires the trigger that creates the confirmed date
+    if (!id.startsWith('prop_')) {
+      try {
+        await decideProposalOnServer(id, 'accepted');
+      } catch (e: any) {
+        set({ error: e?.message || 'Could not sync your acceptance' });
+      }
+    }
     return p;
   },
 
@@ -148,7 +222,15 @@ export const useProposalsStore = create<ProposalsState>((set, get) => ({
       [id]: { proposalId: id, decision: 'declined' as const, decidedAt: new Date().toISOString() },
     };
     set({ decisions });
-    await AsyncStorage.setItem(STORAGE_KEY_DECISIONS, JSON.stringify(decisions));
+    await persistCache(get().proposals, decisions);
+
+    if (!id.startsWith('prop_')) {
+      try {
+        await decideProposalOnServer(id, 'declined');
+      } catch (e: any) {
+        set({ error: e?.message || 'Could not sync your decline' });
+      }
+    }
   },
 
   pendingForUser: (email: string) => {

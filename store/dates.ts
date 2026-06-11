@@ -1,9 +1,20 @@
 /**
- * Confirmed dates store — persists upcoming + past dates.
+ * Confirmed dates store — server-backed via Supabase with a local cache.
+ *
+ * Date rows are created by a DB trigger when a proposal is accepted, so this
+ * store mostly reads. Local-only extras (calendar reminder ids) are merged
+ * onto server rows by proposal id. Signed out, it behaves like the original
+ * device-local store.
  */
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Proposal } from './proposals';
+import {
+  fetchMyDates,
+  cancelDateOnServer,
+  rateDateOnServer,
+  getSessionUserId,
+} from '@/lib/proposals-supabase';
 
 const STORAGE_KEY = 'aura.dates.v1';
 
@@ -22,12 +33,15 @@ export interface ConfirmedDate {
   status: 'upcoming' | 'completed' | 'cancelled';
   rating?: 1 | 2 | 3 | 4 | 5;
   ratedAt?: string;
+  /** Which side of the server row I am — needed to write my rating column */
+  serverRole?: 'a' | 'b';
 }
 
 interface DatesState {
   dates: ConfirmedDate[];
   isHydrated: boolean;
   hydrate: () => Promise<void>;
+  refreshDates: () => Promise<void>;
   addDate: (proposal: Proposal, reminderIds: string[]) => Promise<ConfirmedDate>;
   cancelDate: (id: string) => Promise<void>;
   rateDate: (id: string, rating: 1 | 2 | 3 | 4 | 5) => Promise<void>;
@@ -35,8 +49,45 @@ interface DatesState {
   past: () => ConfirmedDate[];
 }
 
-const persist = async (dates: ConfirmedDate[]) =>
-  AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(dates));
+const persist = async (dates: ConfirmedDate[]) => {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(dates));
+  } catch {
+    // cache write failures are non-fatal
+  }
+};
+
+/** Auto-mark dates as completed once their start time is >1h in the past */
+const withAutoComplete = (dates: ConfirmedDate[]): ConfirmedDate[] => {
+  const now = Date.now();
+  return dates.map(d =>
+    d.status === 'upcoming' && new Date(d.startsAt).getTime() < now - 60 * 60 * 1000
+      ? { ...d, status: 'completed' as const }
+      : d
+  );
+};
+
+/**
+ * Server rows win, but device-local extras (reminder ids, rich venue info
+ * captured at accept time) are merged in by proposal id. Local-only rows
+ * (created while offline) are kept.
+ */
+const mergeServerAndLocal = (server: ConfirmedDate[], local: ConfirmedDate[]): ConfirmedDate[] => {
+  const byProposal = new Map(local.filter(l => l.proposalId).map(l => [l.proposalId, l]));
+  const merged = server.map(s => {
+    const l = s.proposalId ? byProposal.get(s.proposalId) : undefined;
+    if (!l) return s;
+    return {
+      ...s,
+      reminderIds: l.reminderIds?.length ? l.reminderIds : s.reminderIds,
+      venue: l.venue?.tube || l.venue?.emoji !== '📍' ? { ...s.venue, ...l.venue } : s.venue,
+      category: l.category || s.category,
+    };
+  });
+  const serverProposalIds = new Set(server.map(s => s.proposalId).filter(Boolean));
+  const localOnly = local.filter(l => l.id.startsWith('date_') && !serverProposalIds.has(l.proposalId));
+  return [...merged, ...localOnly];
+};
 
 export const useDatesStore = create<DatesState>((set, get) => ({
   dates: [],
@@ -46,17 +97,25 @@ export const useDatesStore = create<DatesState>((set, get) => ({
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       const dates: ConfirmedDate[] = raw ? JSON.parse(raw) : [];
-      // Auto-mark dates as completed if their start time has passed
-      const now = Date.now();
-      const updated = dates.map(d =>
-        d.status === 'upcoming' && new Date(d.startsAt).getTime() < now - 60 * 60 * 1000
-          ? { ...d, status: 'completed' as const }
-          : d
-      );
+      const updated = withAutoComplete(dates);
       set({ dates: updated, isHydrated: true });
       if (updated.some((d, i) => d.status !== dates[i]?.status)) await persist(updated);
     } catch {
       set({ isHydrated: true });
+    }
+    await get().refreshDates();
+  },
+
+  refreshDates: async () => {
+    try {
+      const uid = await getSessionUserId();
+      if (!uid) return;
+      const server = await fetchMyDates();
+      const merged = withAutoComplete(mergeServerAndLocal(server, get().dates));
+      set({ dates: merged });
+      await persist(merged);
+    } catch {
+      // offline — keep the cached list
     }
   },
 
@@ -91,6 +150,9 @@ export const useDatesStore = create<DatesState>((set, get) => ({
     const dates = [newDate, ...get().dates];
     set({ dates });
     await persist(dates);
+    // The server creates its own row via the acceptance trigger — pull it in
+    // so this local placeholder is replaced by the canonical version.
+    get().refreshDates().catch(() => {});
     return newDate;
   },
 
@@ -98,14 +160,21 @@ export const useDatesStore = create<DatesState>((set, get) => ({
     const dates = get().dates.map(d => d.id === id ? { ...d, status: 'cancelled' as const } : d);
     set({ dates });
     await persist(dates);
+    if (!id.startsWith('date_')) {
+      try { await cancelDateOnServer(id); } catch {}
+    }
   },
 
   rateDate: async (id, rating) => {
+    const target = get().dates.find(d => d.id === id);
     const dates = get().dates.map(d =>
       d.id === id ? { ...d, rating, ratedAt: new Date().toISOString() } : d
     );
     set({ dates });
     await persist(dates);
+    if (target && !id.startsWith('date_') && target.serverRole) {
+      try { await rateDateOnServer(id, target.serverRole, rating); } catch {}
+    }
   },
 
   upcoming: () => get().dates

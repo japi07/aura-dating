@@ -5,7 +5,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "allowJs": true,
     "jsx": "react-native",
     "lib": [
@@ -40,7 +40,9 @@
   "exclude": [
     "node_modules",
     "build",
-    "dist"
+    "dist",
+    "server",
+    "aura-dating-main"
   ],
   "extends": "expo/tsconfig.base"
 }

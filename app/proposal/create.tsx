@@ -74,7 +74,8 @@ export default function CreateProposalScreen() {
         Alert.alert('Camera permission needed', 'We need camera access so you can record your video introduction.');
         return;
       }
-      const mic = await ImagePicker.requestMicrophonePermissionsAsync?.();
+      // Not in expo-image-picker's types on every SDK — call defensively
+      const mic = await (ImagePicker as any).requestMicrophonePermissionsAsync?.();
       if (mic && !mic.granted) {
         Alert.alert('Microphone permission needed', 'A silent video isn\'t much of an introduction — we need mic access.');
         return;

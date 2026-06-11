@@ -10,7 +10,7 @@ import { COLORS } from '@/constants/colors';
 import { useSettingsStore } from '@/store/settings';
 import { useAuthStore } from '@/store/auth';
 
-const VISIBILITY_OPTIONS = [
+const VISIBILITY_OPTIONS: { key: 'all' | 'verifiedOnly' | 'paused'; label: string; desc: string; icon: string }[] = [
   { key: 'all', label: 'All verified men', desc: 'Maximum visibility — recommended', icon: 'eye' },
   { key: 'verifiedOnly', label: 'Only highly verified men', desc: 'Both biometric + ID verified', icon: 'shield-checkmark' },
   { key: 'paused', label: 'Pause my profile', desc: 'You\'ll receive zero proposals', icon: 'pause' },
