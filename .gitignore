@@ -79,3 +79,6 @@ coverage/
 *.orig.*
 .cache/
 .tmp/
+
+# Stale duplicate of the project (GitHub zip extract) — do not commit
+aura-dating-main/

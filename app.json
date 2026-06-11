@@ -16,13 +16,11 @@
       "**/*"
     ],
     "ios": {
-      "supportsTabletMode": false,
-      "bundleIdentifier": "com.auradating.app",
+      "supportsTablet": false,
+      "bundleIdentifier": "com.auradating.ios",
       "usesAppleSignIn": true,
       "infoPlist": {
-        "UIRequiredDeviceCapabilities": [
-          "portrait"
-        ],
+        "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Aura uses your camera for the verified-human selfie check and your video introductions.",
         "NSMicrophoneUsageDescription": "Aura records audio for your video introduction and liveness video.",
         "NSPhotoLibraryUsageDescription": "Aura needs photo access so you can upload profile pictures.",
@@ -38,7 +36,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#C8175E"
       },
-      "package": "com.auradating.app",
+      "package": "com.auradating.ios",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -48,7 +46,8 @@
         "android.permission.READ_CALENDAR",
         "android.permission.WRITE_CALENDAR",
         "android.permission.USE_BIOMETRIC",
-        "android.permission.USE_FINGERPRINT"
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -107,9 +106,11 @@
     "extra": {
       "supabaseUrl": "https://krkibouizxurqboyahon.supabase.co",
       "supabaseAnonKey": "sb_publishable_5I_1U6d_dLezUnWYPNF7xQ_BQAU0w-F",
+      "router": {},
       "eas": {
-        "projectId": "PASTE_YOUR_EAS_PROJECT_ID_HERE"
+        "projectId": "c2c7b6ed-e8eb-4a9d-a510-813a466bd68f"
       }
-    }
+    },
+    "owner": "azpi09"
   }
 }
