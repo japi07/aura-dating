@@ -82,3 +82,6 @@ coverage/
 
 # Stale duplicate of the project (GitHub zip extract) — do not commit
 aura-dating-main/
+
+# Supabase CLI local state — project ref / temp data
+supabase/.temp/
