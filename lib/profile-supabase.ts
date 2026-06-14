@@ -236,6 +236,45 @@ export async function savePushTokenToServer(expoPushToken: string): Promise<void
   if (error) throw error;
 }
 
+/* ─── Aura Gold status ─── */
+
+export interface GoldRow {
+  isGold: boolean;
+  expiresAt: string | null;
+}
+
+/** Read the server's view of the user's Gold status (set by RC webhook). */
+export async function fetchMyGoldStatus(): Promise<GoldRow> {
+  if (!supabaseEnabled) return { isGold: false, expiresAt: null };
+  const supabase = getSupabase();
+  const uid = await getSessionUserId();
+  if (!uid) return { isGold: false, expiresAt: null };
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('is_gold, gold_expires_at')
+    .eq('id', uid)
+    .maybeSingle();
+  if (error) throw error;
+  return { isGold: !!data?.is_gold, expiresAt: data?.gold_expires_at ?? null };
+}
+
+/**
+ * Best-effort client-side write of Gold status for instant feedback after a
+ * purchase. The RevenueCat webhook is the authoritative sync; this just makes
+ * the change visible immediately on this and other devices.
+ */
+export async function setMyGoldStatus(isGold: boolean, expiresAt: string | null): Promise<void> {
+  if (!supabaseEnabled) return;
+  const supabase = getSupabase();
+  const uid = await getSessionUserId();
+  if (!uid) return;
+  const { error } = await supabase
+    .from('profiles')
+    .update({ is_gold: isGold, gold_expires_at: expiresAt })
+    .eq('id', uid);
+  if (error) throw error;
+}
+
 /* ─── account deletion ─── */
 
 /**

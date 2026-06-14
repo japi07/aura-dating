@@ -8,6 +8,7 @@ import { useDatesStore } from '@/store/dates';
 import { useSettingsStore } from '@/store/settings';
 import { useUsersStore } from '@/store/users';
 import { useIntroStore } from '@/store/intro';
+import { useSubscriptionStore } from '@/store/subscription';
 import { COLORS } from '@/constants/colors';
 import {
   registerForPushNotifications,
@@ -22,6 +23,7 @@ export default function RootLayout() {
   const hydrateSettings = useSettingsStore((s) => s.hydrate);
   const hydrateUsers = useUsersStore((s) => s.hydrate);
   const upsertUser = useUsersStore((s) => s.upsertUser);
+  const hydrateSubscription = useSubscriptionStore((s) => s.hydrate);
   // Pull the reactive intro flag so this component re-renders when it changes.
   const hasSeenIntro = useIntroStore((s) => s.hasSeenIntro);
   const hydrateIntro = useIntroStore((s) => s.hydrate);
@@ -50,6 +52,7 @@ export default function RootLayout() {
         try { await savePushTokenToServer(pushToken); } catch { /* offline — retried next launch */ }
       }
       await scheduleDailyProposalReminder();
+      await hydrateSubscription();
     })();
   }, [token, user]);
 

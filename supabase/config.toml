@@ -8,3 +8,7 @@ verify_jwt = true
 
 [functions.notify]
 verify_jwt = true
+
+# RevenueCat calls this without a Supabase JWT — auth is the shared secret
+[functions.revenuecat-webhook]
+verify_jwt = false

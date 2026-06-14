@@ -11,6 +11,7 @@ import { useSettingsStore } from '@/store/settings';
 import { useAuthStore } from '@/store/auth';
 import { deleteMyAccount } from '@/lib/profile-supabase';
 import { getSessionUserId } from '@/lib/proposals-supabase';
+import { useIsGold } from '@/store/subscription';
 
 const VISIBILITY_OPTIONS: { key: 'all' | 'verifiedOnly' | 'paused'; label: string; desc: string; icon: string }[] = [
   { key: 'all', label: 'All verified men', desc: 'Maximum visibility — recommended', icon: 'eye' },
@@ -22,6 +23,7 @@ export default function PrivacyScreen() {
   const router = useRouter();
   const { privacy, hydrate, isHydrated, updatePrivacy } = useSettingsStore();
   const { logout } = useAuthStore();
+  const isGold = useIsGold();
 
   useEffect(() => { if (!isHydrated) hydrate(); }, []);
 
@@ -36,7 +38,21 @@ export default function PrivacyScreen() {
   const hideJob = privacy.hideJob;
   const setHideJob = (v: boolean) => updatePrivacy({ hideJob: v });
   const incognito = privacy.incognito;
-  const setIncognito = (v: boolean) => updatePrivacy({ incognito: v });
+  const setIncognito = (v: boolean) => {
+    // Incognito is an Aura Gold perk — gate turning it on
+    if (v && !isGold) {
+      Alert.alert(
+        'Aura Gold feature',
+        'Incognito mode lets you browse without being seen. It\'s included with Aura Gold.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'See Aura Gold', onPress: () => router.push('/settings/subscription') },
+        ],
+      );
+      return;
+    }
+    updatePrivacy({ incognito: v });
+  };
   const shareAnalytics = privacy.shareAnalytics;
   const setShareAnalytics = (v: boolean) => updatePrivacy({ shareAnalytics: v });
 

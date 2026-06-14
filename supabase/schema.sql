@@ -27,9 +27,16 @@ create table if not exists public.profiles (
   verified_at    timestamptz,
   verification_reason text,
   profile_complete boolean default false,
+  -- Aura Gold subscription (kept in sync by the RevenueCat webhook)
+  is_gold         boolean default false,
+  gold_expires_at timestamptz,
   created_at     timestamptz default now(),
   updated_at     timestamptz default now()
 );
+
+-- Backfill for projects created before the Gold columns existed
+alter table public.profiles add column if not exists is_gold boolean default false;
+alter table public.profiles add column if not exists gold_expires_at timestamptz;
 
 create index if not exists profiles_gender_idx on public.profiles(gender);
 create index if not exists profiles_city_idx on public.profiles(city);
