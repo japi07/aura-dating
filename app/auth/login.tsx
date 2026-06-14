@@ -43,10 +43,15 @@ export default function LoginScreen() {
       // Prefer Supabase if configured; otherwise fall back to the legacy
       // axios-based authApi (which then falls back to local-only mode).
       if (supabaseEnabled) {
-        const { user, token } = await signInWithEmail(email, password);
-        await setToken(token);
-        setUser(user);
-        router.replace('/');
+        try {
+          const { user, token } = await signInWithEmail(email, password);
+          await setToken(token);
+          setUser(user);
+          router.replace('/');
+        } catch (e: any) {
+          // Real auth error — show it, don't fabricate a local account
+          Alert.alert('Login failed', e?.message || 'Invalid email or password.');
+        }
         return;
       }
       const res = await authApi.login(email, password);
@@ -70,7 +75,6 @@ export default function LoginScreen() {
           name: email.split('@')[0],
           profileComplete: true,
           city: 'London',
-          photoUrl: `https://i.pravatar.cc/400?u=${encodeURIComponent(email)}`,
         });
         router.replace('/');
         return;

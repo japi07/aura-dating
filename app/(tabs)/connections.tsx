@@ -125,7 +125,13 @@ export default function DatesScreen() {
 
                   <View style={styles.cardBody}>
                     <View style={styles.profileRow}>
-                      <Image source={{ uri: d.with.photoUrl }} style={styles.profileImg} />
+                      {d.with.photoUrl ? (
+                        <Image source={{ uri: d.with.photoUrl }} style={styles.profileImg} />
+                      ) : (
+                        <View style={[styles.profileImg, styles.photoFallback]}>
+                          <Ionicons name="person" size={26} color={COLORS.TEXT_MUTED} />
+                        </View>
+                      )}
                       <View style={styles.profileInfo}>
                         <View style={styles.nameRow}>
                           <Text style={styles.name}>{d.with.name}, {d.with.age}</Text>
@@ -205,7 +211,13 @@ export default function DatesScreen() {
             pastList.map((d) => (
               <View key={d.id} style={styles.pastCard}>
                 <View style={styles.pastTop}>
-                  <Image source={{ uri: d.with.photoUrl }} style={styles.pastImg} />
+                  {d.with.photoUrl ? (
+                    <Image source={{ uri: d.with.photoUrl }} style={styles.pastImg} />
+                  ) : (
+                    <View style={[styles.pastImg, styles.photoFallback]}>
+                      <Ionicons name="person" size={20} color={COLORS.TEXT_MUTED} />
+                    </View>
+                  )}
                   <View style={{ flex: 1 }}>
                     <Text style={styles.pastName}>{d.with.name}, {d.with.age}</Text>
                     <Text style={styles.pastWhen}>{formatDate(d.startsAt)} · {formatTime(d.startsAt)}</Text>
@@ -299,6 +311,7 @@ const styles = StyleSheet.create({
   cardBody: { padding: 18 },
   profileRow: { flexDirection: 'row', gap: 14, alignItems: 'center', marginBottom: 14 },
   profileImg: { width: 64, height: 64, borderRadius: 20 },
+  photoFallback: { backgroundColor: COLORS.BRAND_MUTED, justifyContent: 'center', alignItems: 'center' },
   profileInfo: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: { fontSize: 18, fontWeight: '800', color: COLORS.TEXT },

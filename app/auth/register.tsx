@@ -179,7 +179,7 @@ export default function RegisterScreen() {
       interests: selectedInterests,
       gender: gender.toLowerCase(),
       genderInterest: genderInterest.toLowerCase(),
-      photoUrl: photoUri || `https://i.pravatar.cc/400?u=${encodeURIComponent(email)}`,
+      photoUrl: photoUri || undefined,
     };
 
     // Prefer Supabase when configured

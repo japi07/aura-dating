@@ -23,6 +23,7 @@ export interface DirectoryUser {
   bio?: string;
   gender?: string;
   genderInterest?: string;
+  interests?: string[];
   photoUrl?: string;
   verified?: boolean;
   /** When the entry was added or last refreshed */
@@ -76,6 +77,7 @@ export const useUsersStore = create<UsersState>((set, get) => ({
         bio: m.bio,
         gender: m.gender?.toLowerCase(),
         genderInterest: m.genderInterest?.toLowerCase(),
+        interests: m.interests,
         photoUrl: m.photoUrl,
         verified: m.verified,
         updatedAt: now,
@@ -102,6 +104,7 @@ export const useUsersStore = create<UsersState>((set, get) => ({
       bio: u.bio,
       gender: u.gender?.toLowerCase(),
       genderInterest: u.genderInterest?.toLowerCase(),
+      interests: u.interests,
       photoUrl: u.photoUrl,
       verified: u.verified,
       updatedAt: new Date().toISOString(),

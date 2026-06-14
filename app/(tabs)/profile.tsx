@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState } from 'react';
+import React from 'react';
 import {
   StyleSheet, View, Text, ScrollView,
   Alert, TouchableOpacity, Image, Dimensions, StatusBar,
@@ -13,18 +13,11 @@ import { COLORS } from '@/constants/colors';
 
 const SW = Dimensions.get('window').width;
 
-const INTERESTS = ['Travel', 'Art', 'Cooking', 'Music', 'Photography', 'Yoga', 'Coffee', 'Hiking'];
-
-const PROMPTS = [
-  { q: 'A perfect date looks like...', a: 'Walking through an art market, grabbing spontaneous street food, ending the night on a rooftop with good wine 🍷' },
-  { q: 'The way to my heart is...', a: 'Genuine curiosity and a good sense of humor. Bonus points if you can keep up on a spontaneous road trip.' },
-  { q: 'I\'m a great date because...', a: 'I know the best hidden spots in the city and I\'m genuinely interested in you — not just the curated version.' },
-];
-
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
-  const [promptExpanded, setPromptExpanded] = useState<number | null>(null);
+  const proposals = useProposalsStore((s) => s.proposals);
+  const dates = useDatesStore((s) => s.dates);
 
   // If for any reason we land on Profile without a logged-in user, send them
   // back to login. There is no demo profile any more.
@@ -35,6 +28,30 @@ export default function ProfileScreen() {
 
   const profile = user;
   const isVerified = !!profile.verified;
+
+  // Real stats from the stores
+  const email = (profile.email || '').toLowerCase().trim();
+  const receivedCount = proposals.filter((p) => p?.recipientEmail?.toLowerCase?.() === email).length;
+  const upcomingCount = dates.filter((d) => d.status === 'upcoming').length;
+  const completedCount = dates.filter((d) => d.status === 'completed').length;
+  const STATS = [
+    { val: String(receivedCount), label: 'Proposals', icon: 'mail-outline', color: COLORS.BRAND },
+    { val: String(upcomingCount), label: 'Upcoming', icon: 'calendar', color: COLORS.LIKE },
+    { val: String(completedCount), label: 'Dates', icon: 'heart', color: COLORS.GOLD },
+  ];
+
+  // Real profile completion — fraction of key fields filled in
+  const completionFields = [
+    !!profile.photoUrl,
+    !!profile.bio,
+    !!profile.city,
+    (profile.interests?.length ?? 0) > 0,
+    !!(profile.birthday || profile.age),
+    isVerified,
+  ];
+  const completionPct = Math.round(
+    (completionFields.filter(Boolean).length / completionFields.length) * 100,
+  );
 
   const handleLogout = () => {
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
@@ -58,8 +75,6 @@ export default function ProfileScreen() {
       },
     ]);
   };
-
-  const completionPct = isVerified ? 100 : 78;
 
   const settings = [
     { icon: 'videocam-outline', label: 'Send a date proposal', desc: 'Record a video and send it by email', color: COLORS.BRAND, route: '/proposal/create' },
@@ -92,7 +107,13 @@ export default function ProfileScreen() {
         {/* Hero card */}
         <View style={styles.heroCard}>
           <View style={styles.heroPhotoWrap}>
-            <Image source={{ uri: profile.photoUrl }} style={styles.heroPhoto} />
+            {profile.photoUrl ? (
+              <Image source={{ uri: profile.photoUrl }} style={styles.heroPhoto} />
+            ) : (
+              <View style={[styles.heroPhoto, styles.heroPhotoPlaceholder]}>
+                <Ionicons name="person" size={40} color={COLORS.TEXT_MUTED} />
+              </View>
+            )}
             <TouchableOpacity style={styles.editPhotoBtn} onPress={() => router.push('/profile/edit')}>
               <Ionicons name="camera" size={16} color="#fff" />
             </TouchableOpacity>
@@ -178,11 +199,7 @@ export default function ProfileScreen() {
 
         {/* Stats */}
         <View style={styles.statsRow}>
-          {[
-            { val: '12', label: 'Proposals', icon: 'mail-outline', color: COLORS.BRAND },
-            { val: '4', label: 'Dates', icon: 'heart', color: COLORS.LIKE },
-            { val: '4.8', label: 'Rating', icon: 'star', color: COLORS.GOLD },
-          ].map((s, i) => (
+          {STATS.map((s, i) => (
             <View key={i} style={[styles.statBox, i === 1 && styles.statBoxMid]}>
               <View style={[styles.statIcon, { backgroundColor: s.color + '18' }]}>
                 <Ionicons name={s.icon as any} size={18} color={s.color} />
@@ -202,32 +219,18 @@ export default function ProfileScreen() {
         )}
 
         {/* Interests */}
-        <View style={styles.section}>
-          <Text style={styles.secTitle}>Interests</Text>
-          <View style={styles.interestGrid}>
-            {(profile.interests || INTERESTS).map((tag) => (
-              <View key={tag} style={styles.interestChip}>
-                <Text style={styles.interestText}>{tag}</Text>
-              </View>
-            ))}
+        {(profile.interests?.length ?? 0) > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.secTitle}>Interests</Text>
+            <View style={styles.interestGrid}>
+              {profile.interests!.map((tag) => (
+                <View key={tag} style={styles.interestChip}>
+                  <Text style={styles.interestText}>{tag}</Text>
+                </View>
+              ))}
+            </View>
           </View>
-        </View>
-
-        {/* Prompts */}
-        <View style={styles.promptSection}>
-          <Text style={[styles.secTitle, { paddingHorizontal: 20 }]}>My Prompts</Text>
-          {PROMPTS.map((p, i) => (
-            <TouchableOpacity
-              key={i}
-              style={styles.promptCard}
-              onPress={() => setPromptExpanded(promptExpanded === i ? null : i)}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.promptQ}>{p.q}</Text>
-              <Text style={styles.promptA} numberOfLines={promptExpanded === i ? undefined : 2}>{p.a}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        )}
 
         {/* Settings */}
         <View style={styles.settingsSection}>
@@ -294,6 +297,7 @@ const styles = StyleSheet.create({
   },
   heroPhotoWrap: { position: 'relative' },
   heroPhoto: { width: 90, height: 90, borderRadius: 45, borderWidth: 3, borderColor: COLORS.BRAND_MUTED },
+  heroPhotoPlaceholder: { backgroundColor: COLORS.BRAND_MUTED, justifyContent: 'center', alignItems: 'center' },
   editPhotoBtn: {
     position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14,
     backgroundColor: COLORS.BRAND, justifyContent: 'center', alignItems: 'center',

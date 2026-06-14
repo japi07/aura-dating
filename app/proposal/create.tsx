@@ -174,12 +174,47 @@ export default function CreateProposalScreen() {
     return 'split';
   };
 
+  /**
+   * Real compatibility from actual profile data: shared interests, same area,
+   * and mutual verification. No random numbers — if there's nothing in common
+   * it's simply framed as a direct invitation.
+   */
+  const computeMatch = (recipient: DirectoryUser): { score: number; reason: string } => {
+    const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+    const firstPart = (c?: string) => (c || '').toLowerCase().split(',')[0].trim();
+    const reasons: string[] = [];
+    let score = 60; // baseline for an intentional, hand-picked invite
+
+    const mine = (user?.interests ?? []).map((s) => s.toLowerCase());
+    const theirs = (recipient.interests ?? []).map((s) => s.toLowerCase());
+    const shared = mine.filter((i) => theirs.includes(i));
+    if (shared.length) {
+      score += Math.min(shared.length * 8, 28);
+      reasons.push(`You both love ${shared.slice(0, 3).map(cap).join(', ')}`);
+    }
+
+    if (user?.city && recipient.city && firstPart(user.city) === firstPart(recipient.city)) {
+      score += 8;
+      reasons.push(`Both in ${cap(firstPart(recipient.city))}`);
+    }
+
+    if (user?.verified && recipient.verified) {
+      score += 4;
+      reasons.push('Both verified members');
+    }
+
+    score = Math.max(55, Math.min(score, 99));
+    const reason = reasons.length ? reasons.join(' · ') : 'A direct invitation, chosen just for you';
+    return { score, reason };
+  };
+
   const handleSend = async () => {
     if (!validateForm()) return;
     setLoading(true);
     try {
       const resolvedVenue = resolveVenue();
       const r = selectedRecipient!;
+      const match = computeMatch(r);
 
       await sendProposal({
         from: {
@@ -188,15 +223,15 @@ export default function CreateProposalScreen() {
           age: user?.age || 0,
           area: user?.city?.split(',')[0]?.trim() || 'London',
           job: '',
-          photoUrl: user?.photoUrl || `https://i.pravatar.cc/400?u=${encodeURIComponent(user?.email || 'anon')}`,
+          photoUrl: user?.photoUrl || '',
           verified: !!user?.verified,
           lat: 51.5074,
           lng: -0.1278,
           email: user?.email,
         },
         recipientEmail: r.email,
-        matchScore: 90,
-        matchReason: 'Sent directly to you',
+        matchScore: match.score,
+        matchReason: match.reason,
         venue: resolvedVenue as any,
         startsAt: parseStartsAt(),
         payment: paymentToEnum(),

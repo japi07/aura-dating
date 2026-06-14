@@ -297,6 +297,7 @@ export interface ServerProfile {
   bio?: string;
   gender?: string;
   genderInterest?: string;
+  interests?: string[];
   photoUrl?: string;
   verified?: boolean;
 }
@@ -308,7 +309,7 @@ export async function fetchMembers(limit = 100): Promise<ServerProfile[]> {
   if (!uid) return [];
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, name, age, city, bio, gender, gender_interest, photo_url, verification_status')
+    .select('id, email, name, age, city, bio, gender, gender_interest, interests, photo_url, verification_status')
     .neq('id', uid)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -322,6 +323,7 @@ export async function fetchMembers(limit = 100): Promise<ServerProfile[]> {
     bio: p.bio ?? undefined,
     gender: p.gender ?? undefined,
     genderInterest: p.gender_interest ?? undefined,
+    interests: Array.isArray(p.interests) ? p.interests : undefined,
     photoUrl: p.photo_url ?? undefined,
     verified: p.verification_status === 'verified',
   }));

@@ -260,7 +260,13 @@ export default function TodayScreen() {
             <Animated.View style={[styles.proposalCard, { opacity: fade, transform: [{ translateY: lift }] }]}>
               {/* Photo with gradient overlay */}
               <View style={styles.photoSection}>
-                <Image source={{ uri: proposal.from.photoUrl }} style={styles.photo} />
+                {proposal.from.photoUrl ? (
+                  <Image source={{ uri: proposal.from.photoUrl }} style={styles.photo} />
+                ) : (
+                  <View style={[styles.photo, styles.photoPlaceholder]}>
+                    <Ionicons name="person" size={90} color="rgba(255,255,255,0.5)" />
+                  </View>
+                )}
                 <LinearGradient
                   colors={['transparent', 'rgba(20,16,40,0.15)', 'rgba(20,16,40,0.85)']}
                   locations={[0, 0.55, 1]}
@@ -512,6 +518,7 @@ const styles = StyleSheet.create({
     height: 360, position: 'relative', backgroundColor: '#222',
   },
   photo: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  photoPlaceholder: { backgroundColor: COLORS.BRAND_MUTED, justifyContent: 'center', alignItems: 'center' },
 
   matchOver: {
     position: 'absolute', top: 16, left: 16,
