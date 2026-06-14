@@ -76,6 +76,19 @@ function rowToProposal(row: any): Proposal {
   };
 }
 
+/**
+ * Fire a push notification for a proposal event via the `notify` Edge
+ * Function. Best-effort: a push failure must never block the user's action,
+ * so all errors are swallowed.
+ */
+async function notifyProposalEvent(proposalId: string, event: 'new' | 'accepted'): Promise<void> {
+  try {
+    await getSupabase().functions.invoke('notify', { body: { proposalId, event } });
+  } catch {
+    // ignore — notifications are non-critical
+  }
+}
+
 export interface ServerProposal {
   proposal: Proposal;
   status: 'pending' | 'accepted' | 'declined' | 'expired' | 'cancelled';
@@ -173,6 +186,8 @@ export async function createProposalOnServer(input: {
       recipient:profiles!proposals_recipient_id_fkey(${PROFILE_COLS})`)
     .single();
   if (error) throw error;
+  // Ping the recipient that a new proposal arrived (non-blocking)
+  notifyProposalEvent(data.id, 'new');
   return rowToProposal(data);
 }
 
@@ -190,6 +205,8 @@ export async function decideProposalOnServer(
     .update({ status: decision })
     .eq('id', proposalId);
   if (error) throw error;
+  // Tell the sender their proposal was accepted (non-blocking)
+  if (decision === 'accepted') notifyProposalEvent(proposalId, 'accepted');
 }
 
 /* ─── dates ─── */

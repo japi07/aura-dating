@@ -5,3 +5,6 @@ project_id = "aura-dating"
 
 [functions.delete-account]
 verify_jwt = true
+
+[functions.notify]
+verify_jwt = true

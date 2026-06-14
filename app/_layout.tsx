@@ -13,6 +13,7 @@ import {
   registerForPushNotifications,
   scheduleDailyProposalReminder,
 } from '@/lib/notifications';
+import { savePushTokenToServer } from '@/lib/profile-supabase';
 
 export default function RootLayout() {
   const { token, user, hydrate } = useAuthStore();
@@ -44,7 +45,10 @@ export default function RootLayout() {
     if (!token || !user) return;
     upsertUser(user);
     (async () => {
-      await registerForPushNotifications();
+      const pushToken = await registerForPushNotifications();
+      if (pushToken) {
+        try { await savePushTokenToServer(pushToken); } catch { /* offline — retried next launch */ }
+      }
       await scheduleDailyProposalReminder();
     })();
   }, [token, user]);

@@ -216,6 +216,26 @@ export async function reportUserOnServer(args: {
   if (error) throw error;
 }
 
+/* ─── push tokens ─── */
+
+/**
+ * Persist this device's Expo push token so the server can send the user
+ * notifications. Upserts on (user_id, expo_push_token) so re-running is safe.
+ */
+export async function savePushTokenToServer(expoPushToken: string): Promise<void> {
+  if (!supabaseEnabled || !expoPushToken) return;
+  const supabase = getSupabase();
+  const uid = await getSessionUserId();
+  if (!uid) return;
+  const { error } = await supabase
+    .from('push_tokens')
+    .upsert(
+      { user_id: uid, expo_push_token: expoPushToken, last_used_at: new Date().toISOString() },
+      { onConflict: 'user_id,expo_push_token' },
+    );
+  if (error) throw error;
+}
+
 /* ─── account deletion ─── */
 
 /**
