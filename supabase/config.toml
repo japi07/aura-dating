@@ -1,0 +1,7 @@
+# Minimal Supabase CLI config for the Aura project.
+# project_id is a local identifier; the live project is selected with
+# `--project-ref` or `supabase link`.
+project_id = "aura-dating"
+
+[functions.delete-account]
+verify_jwt = true
