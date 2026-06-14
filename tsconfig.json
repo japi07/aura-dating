@@ -42,7 +42,8 @@
     "build",
     "dist",
     "server",
-    "aura-dating-main"
+    "aura-dating-main",
+    "supabase/functions"
   ],
   "extends": "expo/tsconfig.base"
 }

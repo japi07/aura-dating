@@ -12,6 +12,8 @@ import * as Haptics from 'expo-haptics';
 import { COLORS } from '@/constants/colors';
 import { useAuthStore } from '@/store/auth';
 import { verificationApi } from '@/lib/api';
+import { submitVerificationToServer } from '@/lib/profile-supabase';
+import { getSessionUserId } from '@/lib/proposals-supabase';
 
 type Step =
   | 'intro'
@@ -182,6 +184,36 @@ export default function VerifyScreen() {
 
     if (user) setUser({ ...user, verificationStatus: 'submitting' });
 
+    // Preferred path: upload straight to Supabase Storage + verifications table.
+    const signedIn = await getSessionUserId();
+    if (signedIn) {
+      try {
+        setUploadPct(15);
+        const result = await submitVerificationToServer({
+          photoUri: selfieUri,
+          videoUri: videoUriArg,
+          videoDurationSec: durSec ?? undefined,
+        });
+        setUploadPct(100);
+        if (user) {
+          setUser({
+            ...user,
+            verificationStatus: 'pending',
+            verificationId: result.verificationId,
+          });
+        }
+        setEstimatedMinutes(result.estimatedReviewMinutes);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        setStep('pending');
+      } catch (e: any) {
+        setError(e?.message || 'Verification upload failed — please try again.');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        setStep('intro');
+      }
+      return;
+    }
+
+    // Legacy / offline fallback: the old REST endpoint (may be unreachable).
     try {
       const result = await verificationApi.submit(
         { photoUri: selfieUri, videoUri: videoUriArg, videoDurationSec: durSec ?? undefined },

@@ -8,6 +8,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/auth';
 import { profileApi } from '@/lib/api';
+import { updateMyProfile } from '@/lib/profile-supabase';
+import { getSessionUserId } from '@/lib/proposals-supabase';
 import { COLORS } from '@/constants/colors';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -65,28 +67,28 @@ export default function EditProfileScreen() {
     }
     setLoading(true);
     try {
-      // Upload photo if changed
-      if (photoChanged && photoUri) {
-        const formData = new FormData();
-        formData.append('photo', {
-          uri: photoUri,
-          name: 'profile.jpg',
-          type: 'image/jpeg',
-        } as any);
-        try {
-          await profileApi.uploadPhoto(formData);
-        } catch {
-          // Photo upload may fail in demo mode — continue saving other fields
-        }
-      }
+      // Final photo URL — replaced with the uploaded public URL if we save
+      // a freshly-picked local image to Supabase.
+      let finalPhotoUrl = photoUri || current.photoUrl;
 
-      // Update profile fields
-      try {
-        await profileApi.updateProfile({
-          name, bio, city, birthday, interests: selectedInterests,
+      const signedIn = await getSessionUserId();
+      if (signedIn) {
+        // Save to Supabase: uploads the photo (if changed) and writes fields
+        const { photoUrl } = await updateMyProfile({
+          name, bio, city, birthday,
+          interests: selectedInterests,
+          photoUrl: photoChanged && photoUri ? photoUri : undefined,
         });
-      } catch {
-        // API may not be connected in demo mode
+        if (photoUrl) finalPhotoUrl = photoUrl;
+      } else {
+        // Offline / legacy demo mode — best-effort REST call, ignore failures
+        try {
+          await profileApi.updateProfile({
+            name, bio, city, birthday, interests: selectedInterests,
+          });
+        } catch {
+          // API may not be connected in demo mode
+        }
       }
 
       // Update local state — always save to store
@@ -94,7 +96,7 @@ export default function EditProfileScreen() {
         ...current,
         name, bio, city, birthday,
         interests: selectedInterests,
-        photoUrl: photoUri || current.photoUrl,
+        photoUrl: finalPhotoUrl,
       });
 
       Alert.alert('Saved', 'Your profile has been updated.', [

@@ -16,6 +16,7 @@ import { useDatesStore } from '@/store/dates';
 import { getCurrentLocation, distanceKm, formatDistance } from '@/lib/location';
 import { scheduleDateReminders } from '@/lib/notifications';
 import { addDateToCalendar } from '@/lib/calendar';
+import { blockUserOnServer, reportUserOnServer } from '@/lib/profile-supabase';
 import {
   formatDate, formatTime, formatCountdown,
   greeting, todayLong, paymentLabel,
@@ -109,6 +110,78 @@ export default function TodayScreen() {
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Pass', style: 'destructive', onPress: () => declineProposal(p.id) },
+      ]
+    );
+  };
+
+  // Overflow menu on the proposal — block or report the sender
+  const handleSafetyMenu = (p: Proposal) => {
+    Alert.alert(
+      p.from.name,
+      'What would you like to do?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block this person',
+          style: 'destructive',
+          onPress: () => confirmBlock(p),
+        },
+        {
+          text: 'Report this person',
+          style: 'destructive',
+          onPress: () => confirmReport(p),
+        },
+      ]
+    );
+  };
+
+  const confirmBlock = (p: Proposal) => {
+    Alert.alert(
+      `Block ${p.from.name}?`,
+      'They won\'t be able to send you proposals. We\'ll also pass on this one.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await blockUserOnServer(p.from.id, 'Blocked from proposal');
+              await declineProposal(p.id);
+              Alert.alert('Blocked', `${p.from.name} can no longer reach you.`);
+            } catch (e: any) {
+              Alert.alert('Could not block', e?.message || 'Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const confirmReport = (p: Proposal) => {
+    Alert.alert(
+      `Report ${p.from.name}?`,
+      'Our trust & safety team will review this. We\'ll also pass on the proposal and block them.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Report & block',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await reportUserOnServer({
+                reportedId: p.from.id,
+                reason: 'Reported from proposal',
+                relatedProposalId: p.id.startsWith('prop_') ? undefined : p.id,
+              });
+              await blockUserOnServer(p.from.id, 'Reported & blocked');
+              await declineProposal(p.id);
+              Alert.alert('Thank you', 'Your report has been sent to our safety team.');
+            } catch (e: any) {
+              Alert.alert('Could not report', e?.message || 'Please try again.');
+            }
+          },
+        },
       ]
     );
   };
@@ -207,6 +280,16 @@ export default function TodayScreen() {
                     <Text style={styles.verifiedOverText}>Verified</Text>
                   </View>
                 )}
+
+                {/* Overflow: block / report */}
+                <TouchableOpacity
+                  style={styles.overflowOver}
+                  onPress={() => handleSafetyMenu(proposal)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="ellipsis-horizontal" size={18} color="#fff" />
+                </TouchableOpacity>
 
                 {/* Bottom-left: name + meta */}
                 <View style={styles.photoBottom}>
@@ -439,11 +522,18 @@ const styles = StyleSheet.create({
   matchOverText: { fontSize: 12, fontWeight: '900', color: COLORS.BRAND, letterSpacing: 0.3 },
 
   verifiedOver: {
-    position: 'absolute', top: 16, right: 16,
+    position: 'absolute', top: 16, right: 58,
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: 'rgba(37,217,151,0.95)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16,
   },
   verifiedOverText: { fontSize: 11, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
+
+  overflowOver: {
+    position: 'absolute', top: 14, right: 16,
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: 'rgba(20,16,40,0.45)',
+    justifyContent: 'center', alignItems: 'center',
+  },
 
   photoBottom: { position: 'absolute', bottom: 22, left: 22, right: 22 },
   nameOver: {

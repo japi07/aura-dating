@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, TouchableOpacity,
-  Image, StatusBar, Alert,
+  Image, StatusBar, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
+import { fetchMyBlocks, unblockUserOnServer, type BlockedMember } from '@/lib/profile-supabase';
 
 const SAFETY_TIPS = [
   { icon: 'people', title: 'Always meet in public', desc: 'Restaurants, cafés, parks. We pre-vet every venue our matchmakers suggest.' },
@@ -16,17 +17,44 @@ const SAFETY_TIPS = [
   { icon: 'call', title: 'Have an exit plan', desc: 'Use our in-app SOS button. We can call you a ride or alert your contacts.' },
 ];
 
-// Real blocked-user list comes from the backend — empty by default.
-const BLOCKED_USERS: { id: string; name: string; age: number; photoUrl: string; blockedDate: string; reason: string }[] = [];
-
 export default function SafetyScreen() {
   const router = useRouter();
-  const [blocked, setBlocked] = useState(BLOCKED_USERS);
+  const [blocked, setBlocked] = useState<BlockedMember[]>([]);
+  const [loadingBlocks, setLoadingBlocks] = useState(true);
 
-  const unblock = (id: string, name: string) => {
+  // Load the real blocked list from Supabase
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const list = await fetchMyBlocks();
+        if (active) setBlocked(list);
+      } catch {
+        // offline / not signed in — show empty
+      } finally {
+        if (active) setLoadingBlocks(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const unblock = (blockedId: string, name: string) => {
     Alert.alert(`Unblock ${name}?`, 'They\'ll be able to send you proposals again.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Unblock', onPress: () => setBlocked((b) => b.filter(x => x.id !== id)) },
+      {
+        text: 'Unblock',
+        onPress: async () => {
+          // Optimistic removal, then persist
+          const prev = blocked;
+          setBlocked((b) => b.filter(x => x.blockedId !== blockedId));
+          try {
+            await unblockUserOnServer(blockedId);
+          } catch (e: any) {
+            setBlocked(prev); // revert on failure
+            Alert.alert('Could not unblock', e?.message || 'Please try again.');
+          }
+        },
+      },
     ]);
   };
 
@@ -96,7 +124,11 @@ export default function SafetyScreen() {
         {/* Blocked users */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Blocked ({blocked.length})</Text>
-          {blocked.length === 0 ? (
+          {loadingBlocks ? (
+            <View style={[styles.card, { padding: 24, alignItems: 'center' }]}>
+              <ActivityIndicator size="small" color={COLORS.BRAND} />
+            </View>
+          ) : blocked.length === 0 ? (
             <View style={[styles.card, { padding: 24, alignItems: 'center' }]}>
               <Text style={styles.emptyText}>No one is blocked.</Text>
             </View>
@@ -104,12 +136,18 @@ export default function SafetyScreen() {
             <View style={styles.card}>
               {blocked.map((u, i) => (
                 <View key={u.id} style={[styles.blockRow, i < blocked.length - 1 && styles.rowBorder]}>
-                  <Image source={{ uri: u.photoUrl }} style={styles.blockAvatar} />
+                  {u.photoUrl ? (
+                    <Image source={{ uri: u.photoUrl }} style={styles.blockAvatar} />
+                  ) : (
+                    <View style={[styles.blockAvatar, styles.blockAvatarPlaceholder]}>
+                      <Ionicons name="person" size={20} color={COLORS.TEXT_MUTED} />
+                    </View>
+                  )}
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.blockName}>{u.name}, {u.age}</Text>
-                    <Text style={styles.blockMeta}>{u.reason} · blocked {u.blockedDate}</Text>
+                    <Text style={styles.blockName}>{u.name}{u.age ? `, ${u.age}` : ''}</Text>
+                    {!!u.reason && <Text style={styles.blockMeta}>{u.reason}</Text>}
                   </View>
-                  <TouchableOpacity style={styles.unblockBtn} onPress={() => unblock(u.id, u.name)}>
+                  <TouchableOpacity style={styles.unblockBtn} onPress={() => unblock(u.blockedId, u.name)}>
                     <Text style={styles.unblockText}>Unblock</Text>
                   </TouchableOpacity>
                 </View>
@@ -183,6 +221,7 @@ const styles = StyleSheet.create({
 
   blockRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 },
   blockAvatar: { width: 46, height: 46, borderRadius: 23 },
+  blockAvatarPlaceholder: { backgroundColor: COLORS.BRAND_MUTED, justifyContent: 'center', alignItems: 'center' },
   blockName: { fontSize: 14, fontWeight: '700', color: COLORS.TEXT },
   blockMeta: { fontSize: 11, color: COLORS.TEXT_MUTED, marginTop: 2 },
   unblockBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: COLORS.BG, borderWidth: 1, borderColor: COLORS.BORDER },

@@ -9,6 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
 import { useSettingsStore } from '@/store/settings';
 import { useAuthStore } from '@/store/auth';
+import { deleteMyAccount } from '@/lib/profile-supabase';
+import { getSessionUserId } from '@/lib/proposals-supabase';
 
 const VISIBILITY_OPTIONS: { key: 'all' | 'verifiedOnly' | 'paused'; label: string; desc: string; icon: string }[] = [
   { key: 'all', label: 'All verified men', desc: 'Maximum visibility — recommended', icon: 'eye' },
@@ -41,13 +43,27 @@ export default function PrivacyScreen() {
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete account?',
-      'All your data will be permanently removed. This cannot be undone.',
+      'All your data — profile, proposals and dates — will be permanently removed. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete account',
           style: 'destructive',
           onPress: async () => {
+            const signedIn = await getSessionUserId();
+            if (signedIn) {
+              try {
+                // Server-side deletion via the delete-account Edge Function
+                await deleteMyAccount();
+              } catch (e: any) {
+                Alert.alert(
+                  'Could not delete account',
+                  e?.message || 'Please try again, or contact support if this continues.',
+                );
+                return;
+              }
+            }
+            // Clear local session + cached state and return to login
             await logout();
             router.replace('/auth/login');
           },

@@ -263,7 +263,11 @@ export default function RegisterScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <TouchableOpacity
-          onPress={() => step > 1 ? (setErrors({}), setStep(step - 1)) : router.back()}
+          onPress={() => {
+            if (step > 1) { setErrors({}); setStep(step - 1); }
+            else if (router.canGoBack()) router.back();
+            else router.replace('/auth/login');
+          }}
           style={styles.backBtn}
         >
           <Ionicons name="arrow-back" size={18} color={COLORS.TEXT} />
