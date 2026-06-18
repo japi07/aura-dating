@@ -171,6 +171,20 @@ create index if not exists verifications_user_idx on public.verifications(user_i
 create index if not exists verifications_status_idx on public.verifications(status, created_at);
 
 -- ───────────────────────────────────────────────────────────────────
+-- support_tickets — in-app help & support messages
+-- ───────────────────────────────────────────────────────────────────
+create table if not exists public.support_tickets (
+  id              uuid primary key default gen_random_uuid(),
+  user_id         uuid not null references public.profiles(id) on delete cascade,
+  subject         text,
+  message         text not null,
+  status          text default 'open' check (status in ('open', 'resolved', 'closed')),
+  created_at      timestamptz default now()
+);
+
+create index if not exists support_tickets_user_idx on public.support_tickets(user_id, created_at desc);
+
+-- ───────────────────────────────────────────────────────────────────
 -- push_tokens — for sending notifications
 -- ───────────────────────────────────────────────────────────────────
 create table if not exists public.push_tokens (
@@ -193,6 +207,7 @@ alter table public.blocks enable row level security;
 alter table public.reports enable row level security;
 alter table public.verifications enable row level security;
 alter table public.push_tokens enable row level security;
+alter table public.support_tickets enable row level security;
 
 -- profiles: everyone can read public columns; only owner can write
 drop policy if exists profiles_select_public on public.profiles;
@@ -249,6 +264,14 @@ create policy verifications_insert_own on public.verifications
 drop policy if exists push_tokens_owner on public.push_tokens;
 create policy push_tokens_owner on public.push_tokens
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- support tickets: user can create + read their own
+drop policy if exists support_tickets_insert on public.support_tickets;
+create policy support_tickets_insert on public.support_tickets
+  for insert with check (auth.uid() = user_id);
+drop policy if exists support_tickets_select_own on public.support_tickets;
+create policy support_tickets_select_own on public.support_tickets
+  for select using (auth.uid() = user_id);
 
 -- ───────────────────────────────────────────────────────────────────
 -- Triggers

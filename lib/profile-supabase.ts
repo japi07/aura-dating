@@ -275,6 +275,24 @@ export async function setMyGoldStatus(isGold: boolean, expiresAt: string | null)
   if (error) throw error;
 }
 
+/* ─── support tickets ─── */
+
+/**
+ * Submit a help/support request. Saved to the support_tickets table where
+ * the team can read and reply (the user's email is joinable via user_id).
+ */
+export async function submitSupportTicket(args: { subject?: string; message: string }): Promise<void> {
+  const supabase = getSupabase();
+  const uid = await getSessionUserId();
+  if (!uid) throw new Error('Please sign in to contact support');
+  const { error } = await supabase.from('support_tickets').insert({
+    user_id: uid,
+    subject: args.subject?.trim() || null,
+    message: args.message.trim(),
+  });
+  if (error) throw error;
+}
+
 /* ─── account deletion ─── */
 
 /**

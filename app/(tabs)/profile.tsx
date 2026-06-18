@@ -83,7 +83,7 @@ export default function ProfileScreen() {
     { icon: 'eye-outline', label: 'Privacy', desc: 'Visibility & data', color: '#2B9FFF', route: '/settings/privacy' },
     { icon: 'shield-outline', label: 'Safety center', desc: 'SOS, blocked, safety tips', color: '#25D997', route: '/settings/safety' },
     { icon: 'diamond-outline', label: 'Aura Gold', desc: 'Premium membership', color: '#FFCF40', route: '/settings/subscription', highlight: true },
-    { icon: 'help-circle-outline', label: 'Help & Support', desc: 'FAQ & contact us', color: '#A78BFA', route: null },
+    { icon: 'help-circle-outline', label: 'Help & Support', desc: 'FAQ & contact us', color: '#A78BFA', route: '/settings/help' },
   ];
 
   return (
