@@ -1,14 +1,17 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, TouchableOpacity,
-  Switch, StatusBar, Alert,
+  Switch, StatusBar, Alert, Share,
 } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
 import { useSettingsStore } from '@/store/settings';
 import { useAuthStore } from '@/store/auth';
+import { useProposalsStore } from '@/store/proposals';
+import { useDatesStore } from '@/store/dates';
 import { deleteMyAccount } from '@/lib/profile-supabase';
 import { getSessionUserId } from '@/lib/proposals-supabase';
 import { useIsGold } from '@/store/subscription';
@@ -22,8 +25,12 @@ const VISIBILITY_OPTIONS: { key: 'all' | 'verifiedOnly' | 'paused'; label: strin
 export default function PrivacyScreen() {
   const router = useRouter();
   const { privacy, hydrate, isHydrated, updatePrivacy } = useSettingsStore();
-  const { logout } = useAuthStore();
+  const settings = useSettingsStore();
+  const { logout, user } = useAuthStore();
+  const proposals = useProposalsStore((s) => s.proposals);
+  const dates = useDatesStore((s) => s.dates);
   const isGold = useIsGold();
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => { if (!isHydrated) hydrate(); }, []);
 
@@ -88,12 +95,37 @@ export default function PrivacyScreen() {
     );
   };
 
-  const handleDownloadData = () => {
-    Alert.alert(
-      'Download my data',
-      'We\'ll prepare a JSON archive of your profile, proposals and dates and email it to you within 24 hours.',
-      [{ text: 'OK' }],
-    );
+  const handleDownloadData = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const myEmail = (user?.email || '').toLowerCase().trim();
+      const archive = {
+        exportedAt: new Date().toISOString(),
+        profile: user ?? null,
+        settings: {
+          notifications: settings.notifications,
+          privacy: settings.privacy,
+          dates: settings.dates,
+          safety: settings.safety,
+        },
+        proposals: proposals.filter(
+          (p) => p?.recipientEmail?.toLowerCase?.() === myEmail || p?.from?.email?.toLowerCase?.() === myEmail,
+        ),
+        dates,
+      };
+      const json = JSON.stringify(archive, null, 2);
+      const fileUri = `${FileSystem.cacheDirectory}aura-my-data.json`;
+      await FileSystem.writeAsStringAsync(fileUri, json, { encoding: FileSystem.EncodingType.UTF8 });
+      await Share.share(
+        { url: fileUri, title: 'My Aura data', message: 'My Aura data export' },
+        { subject: 'My Aura data export' },
+      );
+    } catch (e: any) {
+      Alert.alert('Could not export', e?.message || 'Please try again.');
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (

@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
+import { handleRecoveryUrl } from '@/lib/auth-supabase';
 import { useAuthStore } from '@/store/auth';
 import { useProposalsStore } from '@/store/proposals';
 import { useDatesStore } from '@/store/dates';
@@ -27,7 +29,22 @@ export default function RootLayout() {
   // Pull the reactive intro flag so this component re-renders when it changes.
   const hasSeenIntro = useIntroStore((s) => s.hasSeenIntro);
   const hydrateIntro = useIntroStore((s) => s.hydrate);
+  const router = useRouter();
   const [isReady, setIsReady] = useState(false);
+
+  // Password-reset deep link: parse the recovery token, set the session, and
+  // route to the reset screen so the user can choose a new password.
+  useEffect(() => {
+    const handle = async (url: string | null) => {
+      if (!url) return;
+      try {
+        if (await handleRecoveryUrl(url)) router.replace('/reset-password');
+      } catch { /* expired or malformed link — ignore */ }
+    };
+    Linking.getInitialURL().then(handle);
+    const sub = Linking.addEventListener('url', (e) => handle(e.url));
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -105,6 +122,7 @@ export default function RootLayout() {
         <Stack.Screen name="settings/help" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="settings/emergency-contacts" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="sos" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="reset-password" options={{ animation: 'fade' }} />
         <Stack.Screen name="settings/subscription" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>
     </SafeAreaProvider>

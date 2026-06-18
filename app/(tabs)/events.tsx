@@ -1,39 +1,17 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   StyleSheet, View, Text, FlatList, TouchableOpacity,
-  RefreshControl, ScrollView, StatusBar, Alert,
+  RefreshControl, ScrollView, StatusBar, Alert, ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
 import { openInMaps } from '@/lib/maps';
 import { addDateToCalendar } from '@/lib/calendar';
+import { fetchEvents, fetchMyEventRsvps, rsvpToEvent, type AppEvent } from '@/lib/events-supabase';
 
-interface LondonEvent {
-  id: string;
-  title: string;
-  date: string; // ISO
-  venue: string;
-  area: string;
-  address: string;
-  postcode: string;
-  tube: string;
-  type: 'Social' | 'Activity' | 'Culture' | 'Dinner' | 'Workshop';
-  spotsAvailable: number;
-  totalSpots: number;
-  emoji: string;
-  price: string;
-  description: string;
-  featured?: boolean;
-  lat: number;
-  lng: number;
-}
-
-// Events are pulled from the backend by the operations team. Until the
-// backend is wired up, this list stays empty so users see a real empty state.
-// Replace this with a fetch from the events API when ready.
-const LONDON_EVENTS: LondonEvent[] = [];
+type LondonEvent = AppEvent;
 
 const TYPE_CONFIG: Record<string, { bg: string; text: string; icon: string }> = {
   Social:   { bg: COLORS.INFO_LIGHT,    text: COLORS.INFO,    icon: 'people-outline' },
@@ -55,28 +33,54 @@ function fmtTime(iso: string) {
 export default function EventsScreen() {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState<'All' | LondonEvent['type']>('All');
+  const [events, setEvents] = useState<LondonEvent[]>([]);
   const [reserved, setReserved] = useState<string[]>([]);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+  const load = useCallback(async () => {
+    try {
+      const [list, mine] = await Promise.all([fetchEvents(), fetchMyEventRsvps()]);
+      setEvents(list);
+      setReserved(mine);
+    } catch {
+      // offline / not configured — keep whatever we have, empty state shows
+    }
   }, []);
 
-  const filtered = category === 'All' ? LONDON_EVENTS : LONDON_EVENTS.filter((e) => e.type === category);
-  const featured = LONDON_EVENTS.find((e) => e.featured);
+  useEffect(() => {
+    (async () => { await load(); setLoading(false); })();
+  }, []);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }, [load]);
+
+  const filtered = category === 'All' ? events : events.filter((e) => e.type === category);
+  const featured = events.find((e) => e.featured);
   const rest = filtered.filter((e) => !e.featured || category !== 'All');
 
   const reserve = (e: LondonEvent) => {
+    if (reserved.includes(e.id)) return;
     Alert.alert(
       `Reserve a spot at ${e.title}?`,
-      `${e.venue}, ${e.area}\n${fmtDate(e.date)} · ${fmtTime(e.date)}\n${e.price}\n\nWe'll add it to your calendar and send reminders.`,
+      `${e.venue}, ${e.area}\n${fmtDate(e.date)} · ${fmtTime(e.date)}\n${e.price}\n\nWe'll add it to your calendar.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Reserve',
           onPress: async () => {
+            // Optimistic, then persist the RSVP to the server
             setReserved((r) => [...r, e.id]);
+            try {
+              await rsvpToEvent(e.id);
+            } catch (err: any) {
+              setReserved((r) => r.filter((id) => id !== e.id));
+              Alert.alert('Could not reserve', err?.message || 'Please try again.');
+              return;
+            }
             await addDateToCalendar({
               title: `${e.title} (Aura event)`,
               notes: `${e.description}\n\n${e.price}`,
@@ -129,15 +133,21 @@ export default function EventsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.BRAND} />}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <View style={styles.emptyIcon}>
-              <Ionicons name="calendar-outline" size={42} color={COLORS.BRAND} />
+          loading ? (
+            <View style={styles.empty}>
+              <ActivityIndicator color={COLORS.BRAND} />
             </View>
-            <Text style={styles.emptyTitle}>No events yet</Text>
-            <Text style={styles.emptySub}>
-              We're curating new London experiences right now. You'll be the first to know when one opens up near you.
-            </Text>
-          </View>
+          ) : (
+            <View style={styles.empty}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="calendar-outline" size={42} color={COLORS.BRAND} />
+              </View>
+              <Text style={styles.emptyTitle}>No events yet</Text>
+              <Text style={styles.emptySub}>
+                We're curating new London experiences right now. You'll be the first to know when one opens up near you.
+              </Text>
+            </View>
+          )
         }
         ListHeaderComponent={
           category === 'All' && featured ? (

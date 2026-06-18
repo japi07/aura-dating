@@ -153,6 +153,43 @@ export async function signOutSupabase(): Promise<void> {
   try { await getSupabase().auth.signOut(); } catch {}
 }
 
+/** Deep link the password-reset email points back to */
+export const RESET_REDIRECT = 'auradating://reset-password';
+
+/** Send a password-reset email. The link opens the app at the reset screen. */
+export async function sendPasswordReset(email: string): Promise<void> {
+  if (!supabaseEnabled) throw new Error('Supabase not configured');
+  const { error } = await getSupabase().auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+    redirectTo: RESET_REDIRECT,
+  });
+  if (error) throw error;
+}
+
+/** Set a new password for the currently-authenticated (or recovery) session. */
+export async function updatePassword(newPassword: string): Promise<void> {
+  if (!supabaseEnabled) throw new Error('Supabase not configured');
+  const { error } = await getSupabase().auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}
+
+/**
+ * Parse an incoming recovery deep link and establish the recovery session so
+ * the user can set a new password. Returns true when the URL was a recovery link.
+ */
+export async function handleRecoveryUrl(url: string): Promise<boolean> {
+  if (!url) return false;
+  const hashIndex = url.indexOf('#');
+  if (hashIndex === -1) return false;
+  const params = new URLSearchParams(url.substring(hashIndex + 1));
+  if (params.get('type') !== 'recovery') return false;
+  const access_token = params.get('access_token');
+  const refresh_token = params.get('refresh_token');
+  if (!access_token || !refresh_token) return false;
+  const { error } = await getSupabase().auth.setSession({ access_token, refresh_token });
+  if (error) throw error;
+  return true;
+}
+
 /** Compute age from a yyyy-mm-dd, dd/mm/yyyy or any Date-parseable string */
 export function computeAge(str?: string): number | undefined {
   if (!str) return undefined;

@@ -185,6 +185,40 @@ create table if not exists public.support_tickets (
 create index if not exists support_tickets_user_idx on public.support_tickets(user_id, created_at desc);
 
 -- ───────────────────────────────────────────────────────────────────
+-- events + event_rsvps — curated London events (ops-managed)
+-- ───────────────────────────────────────────────────────────────────
+create table if not exists public.events (
+  id              uuid primary key default gen_random_uuid(),
+  title           text not null,
+  date            timestamptz not null,
+  venue           text not null,
+  area            text,
+  address         text,
+  postcode        text,
+  tube            text,
+  type            text default 'Social' check (type in ('Social', 'Activity', 'Culture', 'Dinner', 'Workshop')),
+  total_spots     int not null default 20,
+  reserved_count  int not null default 0,
+  emoji           text default '🎉',
+  price           text default 'Free',
+  description     text,
+  featured        boolean default false,
+  lat             double precision,
+  lng             double precision,
+  created_at      timestamptz default now()
+);
+create index if not exists events_date_idx on public.events(date);
+
+create table if not exists public.event_rsvps (
+  id              uuid primary key default gen_random_uuid(),
+  event_id        uuid not null references public.events(id) on delete cascade,
+  user_id         uuid not null references public.profiles(id) on delete cascade,
+  created_at      timestamptz default now(),
+  unique (event_id, user_id)
+);
+create index if not exists event_rsvps_user_idx on public.event_rsvps(user_id);
+
+-- ───────────────────────────────────────────────────────────────────
 -- push_tokens — for sending notifications
 -- ───────────────────────────────────────────────────────────────────
 create table if not exists public.push_tokens (
@@ -208,6 +242,8 @@ alter table public.reports enable row level security;
 alter table public.verifications enable row level security;
 alter table public.push_tokens enable row level security;
 alter table public.support_tickets enable row level security;
+alter table public.events enable row level security;
+alter table public.event_rsvps enable row level security;
 
 -- profiles: everyone can read public columns; only owner can write
 drop policy if exists profiles_select_public on public.profiles;
@@ -273,6 +309,15 @@ drop policy if exists support_tickets_select_own on public.support_tickets;
 create policy support_tickets_select_own on public.support_tickets
   for select using (auth.uid() = user_id);
 
+-- events: readable by anyone; managed by ops via service role
+drop policy if exists events_select on public.events;
+create policy events_select on public.events for select using (true);
+
+-- event RSVPs: owner reads + writes their own
+drop policy if exists event_rsvps_owner on public.event_rsvps;
+create policy event_rsvps_owner on public.event_rsvps
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
 -- ───────────────────────────────────────────────────────────────────
 -- Triggers
 -- ───────────────────────────────────────────────────────────────────
@@ -335,6 +380,26 @@ drop trigger if exists on_proposal_status_change on public.proposals;
 create trigger on_proposal_status_change
   before update of status on public.proposals
   for each row execute function public.handle_proposal_accepted();
+
+-- Keep events.reserved_count in sync with RSVPs
+create or replace function public.bump_event_reserved() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if (TG_OP = 'INSERT') then
+    update public.events set reserved_count = reserved_count + 1 where id = new.event_id;
+    return new;
+  elsif (TG_OP = 'DELETE') then
+    update public.events set reserved_count = greatest(reserved_count - 1, 0) where id = old.event_id;
+    return old;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists on_rsvp_change on public.event_rsvps;
+create trigger on_rsvp_change
+  after insert or delete on public.event_rsvps
+  for each row execute function public.bump_event_reserved();
 
 -- ───────────────────────────────────────────────────────────────────
 -- Storage buckets

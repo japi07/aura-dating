@@ -2,7 +2,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import React from 'react';
 import {
   StyleSheet, View, Text, ScrollView,
-  Alert, TouchableOpacity, Image, Dimensions, StatusBar,
+  Alert, TouchableOpacity, Image, Dimensions, StatusBar, Share,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -53,6 +53,16 @@ export default function ProfileScreen() {
     (completionFields.filter(Boolean).length / completionFields.length) * 100,
   );
 
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `I'm on Aura — invitation-first dating in London. No swiping, just real date proposals. Join me: https://auradating.app`,
+      });
+    } catch {
+      // user dismissed the share sheet — nothing to do
+    }
+  };
+
   const handleLogout = () => {
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
@@ -98,7 +108,7 @@ export default function ProfileScreen() {
             <TouchableOpacity style={styles.topBtn} onPress={() => router.push('/profile/edit')}>
               <Ionicons name="create-outline" size={20} color={COLORS.TEXT_SECONDARY} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.topBtn}>
+            <TouchableOpacity style={styles.topBtn} onPress={handleShare}>
               <Ionicons name="share-outline" size={20} color={COLORS.TEXT_SECONDARY} />
             </TouchableOpacity>
           </View>
