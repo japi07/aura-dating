@@ -99,6 +99,8 @@ interface SettingsState extends AppSettings {
   updateDates: (patch: Partial<DatePrefs>) => Promise<void>;
   blockUser: (id: string) => Promise<void>;
   unblockUser: (id: string) => Promise<void>;
+  addEmergencyContact: (name: string, phone: string) => Promise<void>;
+  removeEmergencyContact: (id: string) => Promise<void>;
   resetAll: () => Promise<void>;
 }
 
@@ -157,6 +159,21 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   unblockUser: async (id) => {
     const list = get().safety.blockedUserIds.filter(x => x !== id);
     const next = { ...get().safety, blockedUserIds: list };
+    set({ safety: next });
+    await persist({ notifications: get().notifications, privacy: get().privacy, dates: get().dates, safety: next });
+  },
+
+  addEmergencyContact: async (name, phone) => {
+    const contact = { id: `ec_${Date.now()}`, name: name.trim(), phone: phone.trim() };
+    const list = [...get().safety.emergencyContacts, contact];
+    const next = { ...get().safety, emergencyContacts: list };
+    set({ safety: next });
+    await persist({ notifications: get().notifications, privacy: get().privacy, dates: get().dates, safety: next });
+  },
+
+  removeEmergencyContact: async (id) => {
+    const list = get().safety.emergencyContacts.filter(c => c.id !== id);
+    const next = { ...get().safety, emergencyContacts: list };
     set({ safety: next });
     await persist({ notifications: get().notifications, privacy: get().privacy, dates: get().dates, safety: next });
   },

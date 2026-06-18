@@ -103,6 +103,8 @@ export default function RootLayout() {
         <Stack.Screen name="settings/preferences" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="settings/safety" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="settings/help" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="settings/emergency-contacts" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="sos" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="settings/subscription" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>
     </SafeAreaProvider>

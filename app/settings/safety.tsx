@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
 import { fetchMyBlocks, unblockUserOnServer, type BlockedMember } from '@/lib/profile-supabase';
+import { useSettingsStore } from '@/store/settings';
 
 const SAFETY_TIPS = [
   { icon: 'people', title: 'Always meet in public', desc: 'Restaurants, cafés, parks. We pre-vet every venue our matchmakers suggest.' },
@@ -19,8 +20,12 @@ const SAFETY_TIPS = [
 
 export default function SafetyScreen() {
   const router = useRouter();
+  const { safety, hydrate: hydrateSettings, isHydrated: settingsHydrated } = useSettingsStore();
   const [blocked, setBlocked] = useState<BlockedMember[]>([]);
   const [loadingBlocks, setLoadingBlocks] = useState(true);
+
+  useEffect(() => { if (!settingsHydrated) hydrateSettings(); }, []);
+  const contactCount = safety.emergencyContacts.length;
 
   // Load the real blocked list from Supabase
   useEffect(() => {
@@ -78,10 +83,10 @@ export default function SafetyScreen() {
           </View>
           <Text style={styles.sosTitle}>SOS button</Text>
           <Text style={styles.sosDesc}>
-            On a date and feel uncomfortable? Tap SOS to silently alert your emergency contacts and get help.
+            On a date and feel uncomfortable? Tap SOS to call emergency services or alert your trusted contacts with your location.
           </Text>
-          <TouchableOpacity style={styles.sosBtn}>
-            <Text style={styles.sosBtnText}>Set up SOS</Text>
+          <TouchableOpacity style={styles.sosBtn} onPress={() => router.push('/sos')} activeOpacity={0.85}>
+            <Text style={styles.sosBtnText}>Open SOS</Text>
             <Ionicons name="arrow-forward" size={16} color={COLORS.ERROR} />
           </TouchableOpacity>
         </View>
@@ -90,13 +95,17 @@ export default function SafetyScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Emergency contacts</Text>
           <View style={styles.card}>
-            <TouchableOpacity style={styles.row} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => router.push('/settings/emergency-contacts')}>
               <View style={[styles.rowIcon, { backgroundColor: COLORS.LIKE + '18' }]}>
                 <Ionicons name="person-add" size={18} color={COLORS.LIKE} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.rowLabel}>Add a trusted contact</Text>
-                <Text style={styles.rowDesc}>They'll be notified if you trigger SOS</Text>
+                <Text style={styles.rowLabel}>{contactCount > 0 ? 'Manage trusted contacts' : 'Add a trusted contact'}</Text>
+                <Text style={styles.rowDesc}>
+                  {contactCount > 0
+                    ? `${contactCount} contact${contactCount > 1 ? 's' : ''} · alerted if you trigger SOS`
+                    : 'They\'ll be notified if you trigger SOS'}
+                </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={COLORS.BORDER} />
             </TouchableOpacity>
@@ -159,7 +168,15 @@ export default function SafetyScreen() {
         {/* Report */}
         <View style={styles.section}>
           <View style={styles.card}>
-            <TouchableOpacity style={styles.row} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.row}
+              activeOpacity={0.7}
+              onPress={() => Alert.alert(
+                'How to report someone',
+                'Open the proposal from the person you want to report and tap the “⋯” menu in the top corner. You can block or report them from there, and it goes straight to our trust & safety team.',
+                [{ text: 'Got it' }],
+              )}
+            >
               <View style={[styles.rowIcon, { backgroundColor: COLORS.ERROR_LIGHT }]}>
                 <Ionicons name="flag" size={18} color={COLORS.ERROR} />
               </View>
