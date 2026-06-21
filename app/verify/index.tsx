@@ -14,6 +14,7 @@ import { useAuthStore } from '@/store/auth';
 import { verificationApi } from '@/lib/api';
 import { submitVerificationToServer } from '@/lib/profile-supabase';
 import { getSessionUserId } from '@/lib/proposals-supabase';
+import { personaConfigured, startPersonaVerification } from '@/lib/persona';
 
 type Step =
   | 'intro'
@@ -83,6 +84,30 @@ export default function VerifyScreen() {
     Haptics.selectionAsync().catch(() => {});
     if (router.canGoBack()) router.back();
     else router.replace('/(tabs)' as any);
+  };
+
+  /* ─── entry: prefer Persona ID verification when configured ───────── */
+  const beginVerification = async () => {
+    if (personaConfigured) {
+      const uid = await getSessionUserId();
+      if (uid) {
+        try {
+          const started = await startPersonaVerification(uid);
+          if (started) {
+            if (user) setUser({ ...user, verificationStatus: 'pending' });
+            setEstimatedMinutes(10);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+            setStep('pending');
+            return;
+          }
+        } catch (e: any) {
+          setError(e?.message || 'Could not open ID verification. Please try again.');
+          return;
+        }
+      }
+    }
+    // Fall back to the in-app selfie + liveness flow
+    startBiometric();
   };
 
   /* ─── step 1: biometric ─────────────────────────────────────────── */
@@ -330,7 +355,7 @@ export default function VerifyScreen() {
 
         <View style={styles.footer}>
           {error && <Text style={styles.errorText}>⚠️ {error}</Text>}
-          <TouchableOpacity style={styles.primaryBtn} onPress={startBiometric} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.primaryBtn} onPress={beginVerification} activeOpacity={0.85}>
             <Ionicons name={biometricAvailable ? 'finger-print' : 'camera'} size={20} color="#fff" />
             <Text style={styles.primaryBtnText}>
               {wasRejected ? 'Try again' : isPending ? 'Re-submit' : (biometricAvailable ? `Verify with ${biometricType}` : 'Start verification')}

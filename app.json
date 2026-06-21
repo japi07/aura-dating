@@ -109,6 +109,8 @@
       "revenueCatApiKeyIos": "",
       "revenueCatApiKeyAndroid": "",
       "revenueCatEntitlement": "gold",
+      "personaTemplateId": "",
+      "personaEnvironmentId": "production",
       "router": {},
       "eas": {
         "projectId": "c2c7b6ed-e8eb-4a9d-a510-813a466bd68f"

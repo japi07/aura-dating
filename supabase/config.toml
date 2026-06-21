@@ -12,3 +12,10 @@ verify_jwt = true
 # RevenueCat calls this without a Supabase JWT — auth is the shared secret
 [functions.revenuecat-webhook]
 verify_jwt = false
+
+[functions.moderate-image]
+verify_jwt = true
+
+# Persona calls this without a Supabase JWT — auth is the shared secret
+[functions.persona-webhook]
+verify_jwt = false

@@ -24,18 +24,45 @@ export interface ProfilePatch {
 }
 
 /**
- * Upload a profile photo to the public profile-photos bucket and return
- * its public URL. Pass the local file:// URI from the image picker.
+ * Run an uploaded (public) image URL through content moderation.
+ * Returns true if the image is acceptable. Fails open (returns true) when
+ * moderation isn't configured or errors, so uploads aren't blocked before
+ * the OPENAI_API_KEY is set.
+ */
+export async function moderateImageUrl(imageUrl: string): Promise<{ ok: boolean; categories?: string[] }> {
+  if (!supabaseEnabled) return { ok: true };
+  try {
+    const { data, error } = await getSupabase().functions.invoke('moderate-image', { body: { imageUrl } });
+    if (error) return { ok: true }; // function missing / not deployed — don't block
+    return { ok: !data?.flagged, categories: data?.categories };
+  } catch {
+    return { ok: true };
+  }
+}
+
+/**
+ * Upload a profile photo to the public profile-photos bucket, screen it with
+ * content moderation, and return its public URL. Throws if the image is
+ * rejected (and removes the rejected upload).
  */
 export async function uploadMyProfilePhoto(localUri: string): Promise<string> {
   const uid = await getSessionUserId();
   if (!uid) throw new Error('You need to be signed in to upload a photo');
-  return uploadLocalFile({
+  const path = `${uid}/avatar_${Date.now()}.jpg`;
+  const url = await uploadLocalFile({
     bucket: BUCKETS.PROFILE_PHOTOS,
-    path: `${uid}/avatar_${Date.now()}.jpg`,
+    path,
     localUri,
     contentType: 'image/jpeg',
   });
+
+  const moderation = await moderateImageUrl(url);
+  if (!moderation.ok) {
+    // Remove the rejected image so it isn't left in storage
+    try { await getSupabase().storage.from(BUCKETS.PROFILE_PHOTOS).remove([path]); } catch {}
+    throw new Error('That photo didn\'t pass our content guidelines. Please choose another.');
+  }
+  return url;
 }
 
 /**
