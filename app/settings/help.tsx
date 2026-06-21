@@ -10,7 +10,7 @@ import { COLORS } from '@/constants/colors';
 import { submitSupportTicket } from '@/lib/profile-supabase';
 import { getSessionUserId } from '@/lib/proposals-supabase';
 
-const SUPPORT_EMAIL = 'support@auradating.app';
+const SUPPORT_EMAIL = 'azpiazujavier@gmail.com';
 
 const FAQS: { q: string; a: string }[] = [
   {
@@ -172,8 +172,8 @@ export default function HelpScreen() {
         {/* Legal */}
         <Text style={styles.sectionTitle}>Legal</Text>
         <View style={styles.card}>
-          <LinkRow icon="document-text-outline" label="Terms of Service" onPress={() => openLegal('TERMS_OF_SERVICE.md')} border />
-          <LinkRow icon="lock-closed-outline" label="Privacy Policy" onPress={() => openLegal('PRIVACY_POLICY.md')} />
+          <LinkRow icon="document-text-outline" label="Terms of Service" onPress={() => openLegal('terms.html')} border />
+          <LinkRow icon="lock-closed-outline" label="Privacy Policy" onPress={() => openLegal('privacy.html')} />
         </View>
 
         <Text style={styles.version}>Aura · v1.0.0{Platform.OS === 'ios' ? ' · iOS' : ''}</Text>
@@ -183,8 +183,8 @@ export default function HelpScreen() {
 }
 
 function openLegal(file: string) {
-  // Until the legal docs are hosted on a public site, open the source in the repo.
-  const url = `https://github.com/japi07/aura-dating/blob/main/legal/${file}`;
+  // Hosted on GitHub Pages (Settings → Pages → deploy from main /docs).
+  const url = `https://japi07.github.io/aura-dating/legal/${file}`;
   Linking.openURL(url).catch(() => Alert.alert('Could not open', url));
 }
 

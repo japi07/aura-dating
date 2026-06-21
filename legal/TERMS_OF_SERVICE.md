@@ -1,6 +1,6 @@
 # Terms of Service
 
-**Last updated: [DATE]**
+**Last updated: 21 June 2026**
 
 These Terms of Service ("Terms") govern your access to and use of Aura ("Aura", "we", "us", "our") provided by **[Aura Dating Limited]**. By creating an account or using the App, you agree to these Terms. If you don't agree, do not use Aura.
 
@@ -76,7 +76,7 @@ Aura provides safety tools (block, report, SOS) but **we are not responsible for
 - Not share financial information
 - Use your own transport
 
-If you experience inappropriate behavior, report it in-app or email **[trust@auradating.com]**. We respond to safety reports within 24 hours.
+If you experience inappropriate behavior, report it in-app or email **azpiazujavier@gmail.com**. We respond to safety reports within 24 hours.
 
 ## 8. Termination
 
@@ -115,9 +115,9 @@ We may update these Terms. If we make material changes we will notify you in-app
 
 ## 13. Contact
 
-- **General**: [hello@auradating.com]
-- **Privacy**: [privacy@auradating.com]
-- **Safety / abuse**: [trust@auradating.com]
+- **General**: azpiazujavier@gmail.com
+- **Privacy**: azpiazujavier@gmail.com
+- **Safety / abuse**: azpiazujavier@gmail.com
 - **Postal**: [Aura Dating Limited, Your Registered Address, London, UK]
 
 By using Aura you confirm you have read, understood, and agree to be bound by these Terms.

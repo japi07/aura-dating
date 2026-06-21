@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated: [DATE]**
+**Last updated: 21 June 2026**
 
 This Privacy Policy describes how Aura ("Aura", "we", "us", "our") collects, uses, and protects your information when you use the Aura mobile application (the "App") and related services (collectively, the "Services").
 
@@ -14,8 +14,8 @@ Aura is operated by **[Aura Dating Limited]**, a company registered in England a
 
 - **Data Controller**: [Aura Dating Limited]
 - **Data Protection Officer (DPO)**: [name + email]
-- **Contact email**: [privacy@auradating.com]
-- **Support email**: [support@auradating.com]
+- **Contact email**: azpiazujavier@gmail.com
+- **Support email**: azpiazujavier@gmail.com
 
 ## 2. Summary
 
@@ -94,7 +94,7 @@ If you're in the UK or EEA you have the right to:
 
 - **Access** — request a copy of your data
 - **Rectification** — correct inaccurate data
-- **Erasure** — delete your account at any time (Profile → Privacy → Delete my account, or email [privacy@auradating.com])
+- **Erasure** — delete your account at any time (Profile → Privacy → Delete my account, or email azpiazujavier@gmail.com)
 - **Restriction** — limit how we process your data
 - **Portability** — receive your data in a portable format
 - **Object** — to processing based on legitimate interests
@@ -143,7 +143,7 @@ Your data is stored on servers in the **EU** (Ireland). Some service providers (
 
 ## 11. Children
 
-Aura is **strictly 18+**. We do not knowingly collect data from anyone under 18. If we discover that a user is under 18, we will delete their account and all associated data immediately. If you believe a minor is using Aura, please contact [trust@auradating.com] and we will act within 24 hours.
+Aura is **strictly 18+**. We do not knowingly collect data from anyone under 18. If we discover that a user is under 18, we will delete their account and all associated data immediately. If you believe a minor is using Aura, please contact azpiazujavier@gmail.com and we will act within 24 hours.
 
 ## 12. Cookies and tracking
 
@@ -161,6 +161,6 @@ If we materially change this Privacy Policy we will notify you in-app and via em
 
 For any privacy question or to exercise your rights:
 
-- Email: **[privacy@auradating.com]**
+- Email: **azpiazujavier@gmail.com**
 - Postal: [Aura Dating Limited, Your Registered Address, London, UK]
 - Lead supervisory authority: **UK Information Commissioner's Office** (https://ico.org.uk)
