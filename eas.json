@@ -18,7 +18,8 @@
         "APP_ENV": "development",
         "EXPO_PUBLIC_SUPABASE_URL": "$EXPO_PUBLIC_SUPABASE_URL_DEV",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "$EXPO_PUBLIC_SUPABASE_ANON_KEY_DEV"
-      }
+      },
+      "channel": "development"
     },
     "preview": {
       "distribution": "internal",

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { View, Text, ActivityIndicator, ScrollView } from 'react-native';
 import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -17,6 +18,44 @@ import {
   scheduleDailyProposalReminder,
 } from '@/lib/notifications';
 import { savePushTokenToServer } from '@/lib/profile-supabase';
+
+/**
+ * Catches any render-time crash and shows the actual error instead of a
+ * white screen — vital for diagnosing release builds where there's no
+ * dev overlay.
+ */
+class BootErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <ScrollView style={{ flex: 1, backgroundColor: '#FBF6F2' }} contentContainerStyle={{ padding: 28, paddingTop: 90 }}>
+          <Text style={{ fontSize: 22, fontWeight: '800', color: '#1F1428', marginBottom: 10 }}>
+            Something went wrong
+          </Text>
+          <Text style={{ fontSize: 13, color: '#5C4A5E', marginBottom: 16 }}>
+            Please screenshot this and send it to support.
+          </Text>
+          <Text selectable style={{ fontSize: 12, color: '#8E0E40', fontFamily: 'Courier' }}>
+            {String(this.state.error?.message || this.state.error)}
+          </Text>
+        </ScrollView>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+/** Branded boot screen — shown instead of a blank white screen while stores hydrate. */
+function BootSplash() {
+  return (
+    <View style={{ flex: 1, backgroundColor: '#C8175E', justifyContent: 'center', alignItems: 'center' }}>
+      <Text style={{ fontSize: 40, fontWeight: '800', color: '#fff', letterSpacing: -1, marginBottom: 18 }}>aura</Text>
+      <ActivityIndicator color="#fff" />
+    </View>
+  );
+}
 
 export default function RootLayout() {
   const { token, user, hydrate } = useAuthStore();
@@ -47,17 +86,26 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
+    // Failsafe: never leave the user stuck on the boot screen. If any hydrate
+    // hangs (slow network in a release build, etc.) we proceed anyway — the
+    // stores fall back to cached/empty state and refresh in the background.
+    const failsafe = setTimeout(() => setIsReady(true), 6000);
     (async () => {
-      await hydrate();
-      await Promise.all([
-        hydrateProposals(),
-        hydrateDates(),
-        hydrateSettings(),
-        hydrateUsers(),
-        hydrateIntro(),
-      ]);
+      try {
+        await hydrate();
+        await Promise.all([
+          hydrateProposals(),
+          hydrateDates(),
+          hydrateSettings(),
+          hydrateUsers(),
+          hydrateIntro(),
+        ]);
+      } catch {
+        // boot must never fail hard — stores handle their own errors
+      }
       setIsReady(true);
     })();
+    return () => clearTimeout(failsafe);
   }, []);
 
   useEffect(() => {
@@ -73,7 +121,7 @@ export default function RootLayout() {
     })();
   }, [token, user]);
 
-  if (!isReady) return null;
+  if (!isReady) return <BootSplash />;
 
   const isLoggedIn = !!token && !!user;
   const profileComplete = user?.profileComplete ?? false;
@@ -84,6 +132,7 @@ export default function RootLayout() {
   //  3. Not logged in + intro not seen → intro
   //  4. Not logged in + intro seen     → auth
   return (
+    <BootErrorBoundary>
     <SafeAreaProvider>
       <StatusBar style="dark" backgroundColor={COLORS.BG} />
       <Stack
@@ -126,5 +175,6 @@ export default function RootLayout() {
         <Stack.Screen name="settings/subscription" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>
     </SafeAreaProvider>
+    </BootErrorBoundary>
   );
 }

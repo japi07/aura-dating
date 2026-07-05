@@ -116,6 +116,12 @@
         "projectId": "c2c7b6ed-e8eb-4a9d-a510-813a466bd68f"
       }
     },
-    "owner": "azpi09"
+    "owner": "azpi09",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c2c7b6ed-e8eb-4a9d-a510-813a466bd68f"
+    }
   }
 }
