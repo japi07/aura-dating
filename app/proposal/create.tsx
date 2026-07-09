@@ -10,6 +10,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { COLORS } from '@/constants/colors';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
+import { DateField } from '@/components/DateField';
 import { useAuthStore } from '@/store/auth';
 import { useProposalsStore } from '@/store/proposals';
 import { useUsersStore, type DirectoryUser } from '@/store/users';
@@ -416,7 +417,7 @@ export default function CreateProposalScreen() {
 
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
-              <Input label="Date" placeholder="April 12, 2026" value={preferredDate} onChangeText={setPreferredDate} error={errors.preferredDate} icon="calendar-outline" />
+              <DateField label="Date" value={preferredDate} onChange={setPreferredDate} mode="future" placeholder="Pick a date" error={errors.preferredDate} />
             </View>
             <View style={{ flex: 1 }}>
               <Input label="Time" placeholder="7:30 PM" value={preferredTime} onChangeText={setPreferredTime} error={errors.preferredTime} icon="time-outline" />

@@ -14,6 +14,8 @@ import { COLORS } from '@/constants/colors';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { InterestTag } from '@/components/InterestTag';
+import { DateField } from '@/components/DateField';
+import { CityField } from '@/components/CityField';
 
 const ALL_INTERESTS = [
   'Travel', 'Music', 'Art', 'Cooking', 'Sports', 'Reading',
@@ -35,7 +37,7 @@ export default function EditProfileScreen() {
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState(current.name);
   const [bio, setBio] = useState(current.bio || '');
-  const [city, setCity] = useState(current.city || '');
+  const [city] = useState('London');
   const [birthday, setBirthday] = useState(current.birthday || '');
   const [selectedInterests, setSelectedInterests] = useState<string[]>(current.interests || []);
   const [photoUri, setPhotoUri] = useState<string | null>(current.photoUrl || null);
@@ -144,8 +146,8 @@ export default function EditProfileScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionLbl}>Basic Info</Text>
           <Input label="Name" placeholder="Your name" value={name} onChangeText={setName} icon="person-outline" />
-          <Input label="City" placeholder="Where are you based?" value={city} onChangeText={setCity} icon="location-outline" />
-          <Input label="Birthday" placeholder="MM/DD/YYYY" value={birthday} onChangeText={setBirthday} icon="calendar-outline" />
+          <CityField label="City" />
+          <DateField label="Birthday" value={birthday} onChange={setBirthday} mode="past" placeholder="Select your birthday" />
         </View>
 
         {/* Bio */}

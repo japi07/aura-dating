@@ -12,6 +12,8 @@ import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { InterestTag } from '@/components/InterestTag';
 import { Avatar } from '@/components/Avatar';
+import { DateField } from '@/components/DateField';
+import { CityField } from '@/components/CityField';
 import { COLORS } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -51,7 +53,7 @@ export default function OnboardingScreen() {
   const [birthday, setBirthday] = useState('');
   const [gender, setGender] = useState('');
   const [genderInterest, setGenderInterest] = useState('');
-  const [city, setCity] = useState('');
+  const [city, setCity] = useState('London');
   const [bio, setBio] = useState('');
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [selectedDateTypes, setSelectedDateTypes] = useState<string[]>([]);
@@ -179,7 +181,7 @@ export default function OnboardingScreen() {
             )}
           </TouchableOpacity>
 
-          <Input label="Birthday" placeholder="MM/DD/YYYY" value={birthday} onChangeText={setBirthday} error={errors.birthday} icon="calendar-outline" />
+          <DateField label="Birthday" value={birthday} onChange={setBirthday} mode="past" placeholder="Select your birthday" error={errors.birthday} />
 
           <Text style={styles.fieldLbl}>Gender</Text>
           <View style={styles.chips}>
@@ -201,7 +203,7 @@ export default function OnboardingScreen() {
           </View>
           {errors.genderInterest && <Text style={styles.err}>{errors.genderInterest}</Text>}
 
-          <Input label="City" placeholder="Where are you based?" value={city} onChangeText={setCity} error={errors.city} icon="location-outline" />
+          <CityField label="City" />
         </View>
       )}
 
