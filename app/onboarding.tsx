@@ -6,6 +6,8 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '@/store/auth';
 import { profileApi } from '@/lib/api';
+import { updateMyProfile } from '@/lib/profile-supabase';
+import { getSessionUserId } from '@/lib/proposals-supabase';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { InterestTag } from '@/components/InterestTag';
@@ -121,11 +123,26 @@ export default function OnboardingScreen() {
     }
 
     try {
-      await profileApi.updateProfile({
-        birthday, gender, genderInterest, city, bio, interests: selectedInterests,
-      });
+      const signedIn = await getSessionUserId();
+      if (signedIn) {
+        // Persist to Supabase — crucially sets profile_complete = true so the
+        // user isn't sent back through onboarding on their next login.
+        await updateMyProfile({
+          birthday, age, city, bio,
+          gender: gender.toLowerCase(),
+          genderInterest: genderInterest.toLowerCase(),
+          interests: selectedInterests,
+          photoUrl: photoUri || undefined,
+          profileComplete: true,
+        });
+      } else {
+        // Offline / legacy fallback
+        await profileApi.updateProfile({
+          birthday, gender, genderInterest, city, bio, interests: selectedInterests,
+        });
+      }
     } catch {
-      // Backend not reachable in offline mode — local state already saved
+      // Backend not reachable — local state already saved; will re-sync later
     } finally {
       setLoading(false);
       router.replace('/');

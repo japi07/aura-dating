@@ -17,10 +17,12 @@ export interface ProfilePatch {
   bio?: string;
   city?: string;
   birthday?: string;
+  age?: number;
   interests?: string[];
   photoUrl?: string;
   gender?: string;
   genderInterest?: string;
+  profileComplete?: boolean;
 }
 
 /**
@@ -85,9 +87,11 @@ export async function updateMyProfile(patch: ProfilePatch): Promise<{ photoUrl?:
   if (patch.bio !== undefined) row.bio = patch.bio;
   if (patch.city !== undefined) row.city = patch.city;
   if (patch.birthday !== undefined) row.birthday = patch.birthday || null;
+  if (patch.age !== undefined) row.age = patch.age ?? null;
   if (patch.interests !== undefined) row.interests = patch.interests;
   if (patch.gender !== undefined) row.gender = patch.gender;
   if (patch.genderInterest !== undefined) row.gender_interest = patch.genderInterest;
+  if (patch.profileComplete !== undefined) row.profile_complete = patch.profileComplete;
   if (photoUrl !== undefined) row.photo_url = photoUrl;
 
   if (Object.keys(row).length > 0) {
