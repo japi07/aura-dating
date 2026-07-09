@@ -149,6 +149,20 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Photo gallery */}
+        {(profile.photos?.length ?? 0) > 1 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.galleryRow}
+            style={styles.gallery}
+          >
+            {profile.photos!.map((uri, i) => (
+              <Image key={`${uri}-${i}`} source={{ uri }} style={styles.galleryImg} />
+            ))}
+          </ScrollView>
+        )}
+
         {/* Verification CTA — only if not verified */}
         {!isVerified && (
           <TouchableOpacity
@@ -308,6 +322,10 @@ const styles = StyleSheet.create({
   heroPhotoWrap: { position: 'relative' },
   heroPhoto: { width: 90, height: 90, borderRadius: 45, borderWidth: 3, borderColor: COLORS.BRAND_MUTED },
   heroPhotoPlaceholder: { backgroundColor: COLORS.BRAND_MUTED, justifyContent: 'center', alignItems: 'center' },
+
+  gallery: { marginBottom: 14 },
+  galleryRow: { paddingHorizontal: 16, gap: 10 },
+  galleryImg: { width: 130, height: 170, borderRadius: 16, backgroundColor: COLORS.BRAND_MUTED },
   editPhotoBtn: {
     position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14,
     backgroundColor: COLORS.BRAND, justifyContent: 'center', alignItems: 'center',

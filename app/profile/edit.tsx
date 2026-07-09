@@ -40,18 +40,38 @@ export default function EditProfileScreen() {
   const [city] = useState('London');
   const [birthday, setBirthday] = useState(current.birthday || '');
   const [selectedInterests, setSelectedInterests] = useState<string[]>(current.interests || []);
-  const [photoUri, setPhotoUri] = useState<string | null>(current.photoUrl || null);
-  const [photoChanged, setPhotoChanged] = useState(false);
+  const initialPhotos = current.photos?.length ? current.photos : (current.photoUrl ? [current.photoUrl] : []);
+  const [photos, setPhotos] = useState<string[]>(initialPhotos);
 
-  const pickImage = async () => {
+  const MAX_PHOTOS = 6;
+
+  const addPhotos = async () => {
+    if (photos.length >= MAX_PHOTOS) {
+      Alert.alert('Maximum photos', `You can add up to ${MAX_PHOTOS} photos.`);
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsEditing: true, aspect: [1, 1], quality: 0.8,
+      allowsMultipleSelection: true,
+      selectionLimit: MAX_PHOTOS - photos.length,
+      quality: 0.8,
     });
-    if (!result.canceled && result.assets[0]) {
-      setPhotoUri(result.assets[0].uri);
-      setPhotoChanged(true);
+    if (!result.canceled && result.assets?.length) {
+      const uris = result.assets.map((a) => a.uri);
+      setPhotos((prev) => [...prev, ...uris].slice(0, MAX_PHOTOS));
     }
+  };
+
+  const removePhoto = (index: number) => {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const makePrimary = (index: number) => {
+    setPhotos((prev) => {
+      const next = [...prev];
+      const [pick] = next.splice(index, 1);
+      return [pick, ...next];
+    });
   };
 
   const toggle = (interest: string) => {
@@ -69,19 +89,17 @@ export default function EditProfileScreen() {
     }
     setLoading(true);
     try {
-      // Final photo URL — replaced with the uploaded public URL if we save
-      // a freshly-picked local image to Supabase.
-      let finalPhotoUrl = photoUri || current.photoUrl;
+      let finalPhotos = photos;
 
       const signedIn = await getSessionUserId();
       if (signedIn) {
-        // Save to Supabase: uploads the photo (if changed) and writes fields
-        const { photoUrl } = await updateMyProfile({
+        // Save to Supabase: uploads + moderates any new photos and writes fields
+        const res = await updateMyProfile({
           name, bio, city, birthday,
           interests: selectedInterests,
-          photoUrl: photoChanged && photoUri ? photoUri : undefined,
+          photos,
         });
-        if (photoUrl) finalPhotoUrl = photoUrl;
+        if (res.photos) finalPhotos = res.photos;
       } else {
         // Offline / legacy demo mode — best-effort REST call, ignore failures
         try {
@@ -98,7 +116,8 @@ export default function EditProfileScreen() {
         ...current,
         name, bio, city, birthday,
         interests: selectedInterests,
-        photoUrl: finalPhotoUrl,
+        photos: finalPhotos,
+        photoUrl: finalPhotos[0] || current.photoUrl,
       });
 
       Alert.alert('Saved', 'Your profile has been updated.', [
@@ -123,23 +142,33 @@ export default function EditProfileScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Photo */}
+        {/* Photos */}
         <View style={styles.card}>
-          <Text style={styles.sectionLbl}>Profile Photo</Text>
-          <TouchableOpacity style={styles.photoRow} onPress={pickImage}>
-            {photoUri ? (
-              <Image source={{ uri: photoUri }} style={styles.avatar} />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Ionicons name="person" size={28} color={COLORS.TEXT_MUTED} />
+          <Text style={styles.sectionLbl}>Photos</Text>
+          <Text style={styles.photoHint}>Add up to 6. Tap a photo to make it your main one. Long-press hint: the first is shown everywhere.</Text>
+          <View style={styles.photoGrid}>
+            {photos.map((uri, i) => (
+              <View key={`${uri}-${i}`} style={styles.photoTile}>
+                <Image source={{ uri }} style={styles.photoTileImg} />
+                {i === 0 ? (
+                  <View style={styles.primaryBadge}><Text style={styles.primaryBadgeText}>Main</Text></View>
+                ) : (
+                  <TouchableOpacity style={styles.makePrimaryBtn} onPress={() => makePrimary(i)}>
+                    <Ionicons name="star-outline" size={13} color="#fff" />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity style={styles.removePhotoBtn} onPress={() => removePhoto(i)}>
+                  <Ionicons name="close" size={14} color="#fff" />
+                </TouchableOpacity>
               </View>
+            ))}
+            {photos.length < 6 && (
+              <TouchableOpacity style={styles.addPhotoTile} onPress={addPhotos} activeOpacity={0.7}>
+                <Ionicons name="add" size={30} color={COLORS.BRAND} />
+                <Text style={styles.addPhotoText}>Add</Text>
+              </TouchableOpacity>
             )}
-            <View style={styles.photoInfo}>
-              <Text style={styles.photoAction}>Change Photo</Text>
-              <Text style={styles.photoHint}>Tap to upload from gallery</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={COLORS.BORDER} />
-          </TouchableOpacity>
+          </View>
         </View>
 
         {/* Basic Info */}
@@ -201,6 +230,19 @@ const styles = StyleSheet.create({
   },
   sectionLbl: { fontSize: 10, fontWeight: '800', color: COLORS.TEXT_MUTED, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 },
   hint: { fontSize: 12, color: COLORS.TEXT_MUTED, marginBottom: 10 },
+
+  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 },
+  photoTile: { width: 92, height: 116, borderRadius: 14, overflow: 'hidden', position: 'relative', backgroundColor: COLORS.BG },
+  photoTileImg: { width: '100%', height: '100%' },
+  primaryBadge: { position: 'absolute', bottom: 6, left: 6, backgroundColor: COLORS.BRAND, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  primaryBadgeText: { fontSize: 10, fontWeight: '900', color: '#fff' },
+  makePrimaryBtn: { position: 'absolute', bottom: 6, left: 6, width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  removePhotoBtn: { position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  addPhotoTile: {
+    width: 92, height: 116, borderRadius: 14, borderWidth: 1.5, borderColor: COLORS.BRAND,
+    borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 2, backgroundColor: COLORS.BRAND_MUTED,
+  },
+  addPhotoText: { fontSize: 12, fontWeight: '700', color: COLORS.BRAND },
 
   photoRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   avatar: { width: 64, height: 64, borderRadius: 22 },

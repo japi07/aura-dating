@@ -20,6 +20,8 @@ export interface ProfilePatch {
   age?: number;
   interests?: string[];
   photoUrl?: string;
+  /** Full gallery — local URIs are uploaded + moderated; remote URLs pass through */
+  photos?: string[];
   gender?: string;
   genderInterest?: string;
   profileComplete?: boolean;
@@ -72,7 +74,7 @@ export async function uploadMyProfilePhoto(localUri: string): Promise<string> {
  * If `photoUrl` is still a local file:// URI it's uploaded first and the
  * resulting public URL is returned (so the caller can update local state).
  */
-export async function updateMyProfile(patch: ProfilePatch): Promise<{ photoUrl?: string }> {
+export async function updateMyProfile(patch: ProfilePatch): Promise<{ photoUrl?: string; photos?: string[] }> {
   const supabase = getSupabase();
   const uid = await getSessionUserId();
   if (!uid) throw new Error('You need to be signed in to update your profile');
@@ -80,6 +82,16 @@ export async function updateMyProfile(patch: ProfilePatch): Promise<{ photoUrl?:
   let photoUrl = patch.photoUrl;
   if (isLocalUri(photoUrl)) {
     photoUrl = await uploadMyProfilePhoto(photoUrl!);
+  }
+
+  // Gallery: upload+moderate any local photos, keep remote ones as-is.
+  let photos: string[] | undefined;
+  if (patch.photos !== undefined) {
+    photos = [];
+    for (const p of patch.photos) {
+      if (!p) continue;
+      photos.push(isLocalUri(p) ? await uploadMyProfilePhoto(p) : p);
+    }
   }
 
   const row: Record<string, any> = {};
@@ -92,13 +104,19 @@ export async function updateMyProfile(patch: ProfilePatch): Promise<{ photoUrl?:
   if (patch.gender !== undefined) row.gender = patch.gender;
   if (patch.genderInterest !== undefined) row.gender_interest = patch.genderInterest;
   if (patch.profileComplete !== undefined) row.profile_complete = patch.profileComplete;
-  if (photoUrl !== undefined) row.photo_url = photoUrl;
+  if (photos !== undefined) {
+    row.photos = photos;
+    // Keep the primary photo column in sync with the first gallery photo
+    row.photo_url = photos[0] ?? photoUrl ?? null;
+  } else if (photoUrl !== undefined) {
+    row.photo_url = photoUrl;
+  }
 
   if (Object.keys(row).length > 0) {
     const { error } = await supabase.from('profiles').update(row).eq('id', uid);
     if (error) throw error;
   }
-  return { photoUrl };
+  return { photoUrl: photos ? photos[0] : photoUrl, photos };
 }
 
 /* ─── verification ─── */

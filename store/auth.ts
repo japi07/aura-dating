@@ -15,6 +15,8 @@ export interface User {
   gender?: string;
   genderInterest?: string;
   photoUrl?: string;
+  /** Full photo gallery (primary is photos[0]) */
+  photos?: string[];
   /** Set when the user passes the full verification flow */
   verified?: boolean;
   verifiedAt?: string;

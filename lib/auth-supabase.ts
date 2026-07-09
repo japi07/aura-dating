@@ -140,6 +140,7 @@ async function fetchProfile(userId: string): Promise<User> {
     gender: data.gender ?? undefined,
     genderInterest: data.gender_interest ?? undefined,
     photoUrl: data.photo_url ?? undefined,
+    photos: Array.isArray(data.photos) ? data.photos : (data.photo_url ? [data.photo_url] : []),
     verified: data.verification_status === 'verified',
     verifiedAt: data.verified_at ?? undefined,
     verificationStatus: data.verification_status ?? 'unverified',

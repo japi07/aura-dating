@@ -22,6 +22,7 @@ create table if not exists public.profiles (
   bio            text,
   interests      text[] default '{}',
   photo_url      text,
+  photos         text[] default '{}',
   verification_status text default 'unverified'
     check (verification_status in ('unverified', 'submitting', 'pending', 'verified', 'rejected')),
   verified_at    timestamptz,
