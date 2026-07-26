@@ -10,6 +10,7 @@ import { authApi } from '@/lib/api';
 import { signInWithEmail, signInWithApple } from '@/lib/auth-supabase';
 import { supabaseEnabled } from '@/lib/supabase';
 import { AppleSignInButton } from '@/components/AppleSignInButton';
+import { GoogleSignInButton } from '@/components/GoogleSignInButton';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
 
@@ -193,6 +194,9 @@ export default function LoginScreen() {
             }
           }}
           onError={(e) => Alert.alert('Apple sign-in failed', e?.message || 'Please try again.')}
+        />
+        <GoogleSignInButton
+          onError={(e: any) => Alert.alert('Google sign-in failed', e?.message || 'Please try again.')}
         />
 
         {/* Register link */}

@@ -40,3 +40,12 @@ export async function uploadLocalFile(args: {
 export function isLocalUri(uri?: string | null): boolean {
   return !!uri && (uri.startsWith('file://') || uri.startsWith('ph://') || uri.startsWith('content://'));
 }
+
+/**
+ * Keep only URLs another device can actually load. Some early profiles stored
+ * a device-local file:// path, which renders as a blank image for everyone
+ * else — dropping them lets the UI fall back to a proper placeholder.
+ */
+export function remoteOnly(uris?: (string | null | undefined)[] | null): string[] {
+  return (uris ?? []).filter((u): u is string => !!u && /^https?:\/\//.test(u));
+}

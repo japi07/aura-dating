@@ -2,7 +2,8 @@
  * Supabase-backed auth helpers.
  * All auth flows in the app call into these functions.
  */
-import { getSupabase, supabaseEnabled } from './supabase';
+import { getSupabase, supabaseEnabled, BUCKETS } from './supabase';
+import { uploadLocalFile, isLocalUri, remoteOnly } from './storage-upload';
 import type { User } from '@/store/auth';
 
 export interface SignUpInput {
@@ -36,6 +37,24 @@ export async function signUpWithEmail(input: SignUpInput): Promise<{ user: User;
   // Compute age client-side so we always have a verifiable value
   const age = computeAge(input.birthday);
 
+  // The picker gives us a device-local file:// path. That's meaningless to
+  // every other phone, so upload it now that we have a session and store the
+  // public URL instead.
+  let photoUrl = input.photoUrl;
+  if (isLocalUri(photoUrl)) {
+    try {
+      photoUrl = await uploadLocalFile({
+        bucket: BUCKETS.PROFILE_PHOTOS,
+        path: `${data.user.id}/avatar_${Date.now()}.jpg`,
+        localUri: photoUrl!,
+        contentType: 'image/jpeg',
+      });
+    } catch {
+      // Upload failed (offline?) — better no photo than an unusable local path
+      photoUrl = undefined;
+    }
+  }
+
   // Upsert profile with the rest of the details
   const { error: profileError } = await supabase.from('profiles').upsert({
     id: data.user.id,
@@ -48,7 +67,8 @@ export async function signUpWithEmail(input: SignUpInput): Promise<{ user: User;
     city: input.city || null,
     bio: input.bio || null,
     interests: input.interests || [],
-    photo_url: input.photoUrl || null,
+    photo_url: photoUrl || null,
+    photos: photoUrl ? [photoUrl] : [],
     profile_complete: true,
   });
   if (profileError) throw profileError;
@@ -65,7 +85,8 @@ export async function signUpWithEmail(input: SignUpInput): Promise<{ user: User;
     interests: input.interests,
     gender: input.gender?.toLowerCase(),
     genderInterest: input.genderInterest?.toLowerCase(),
-    photoUrl: input.photoUrl,
+    photoUrl,
+    photos: photoUrl ? [photoUrl] : [],
     verificationStatus: 'unverified',
   };
   return { user, token: data.session.access_token };
@@ -139,8 +160,10 @@ async function fetchProfile(userId: string): Promise<User> {
     interests: data.interests ?? [],
     gender: data.gender ?? undefined,
     genderInterest: data.gender_interest ?? undefined,
-    photoUrl: data.photo_url ?? undefined,
-    photos: Array.isArray(data.photos) ? data.photos : (data.photo_url ? [data.photo_url] : []),
+    photoUrl: remoteOnly([data.photo_url])[0],
+    photos: remoteOnly(
+      Array.isArray(data.photos) && data.photos.length ? data.photos : [data.photo_url],
+    ),
     verified: data.verification_status === 'verified',
     verifiedAt: data.verified_at ?? undefined,
     verificationStatus: data.verification_status ?? 'unverified',
@@ -152,6 +175,56 @@ async function fetchProfile(userId: string): Promise<User> {
 export async function signOutSupabase(): Promise<void> {
   if (!supabaseEnabled) return;
   try { await getSupabase().auth.signOut(); } catch {}
+}
+
+/* ─── Google (OAuth) ─── */
+
+/** Deep link Google sends the user back to after consenting */
+export const OAUTH_REDIRECT = 'auradating://auth-callback';
+
+/**
+ * Start Google sign-in. Supabase builds the consent URL; we open it in the
+ * system browser and finish in `handleAuthCallbackUrl` when Google redirects
+ * back into the app. Deliberately avoids native SDKs so it works over-the-air.
+ */
+export async function startGoogleSignIn(): Promise<string> {
+  if (!supabaseEnabled) throw new Error('Supabase not configured');
+  const { data, error } = await getSupabase().auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: OAUTH_REDIRECT,
+      skipBrowserRedirect: true,
+      queryParams: { prompt: 'select_account' },
+    },
+  });
+  if (error) throw error;
+  if (!data?.url) throw new Error('Could not start Google sign-in');
+  return data.url;
+}
+
+/**
+ * Make sure a signed-in OAuth user has a profile row (Google users skip the
+ * email sign-up path, so nothing has created one yet). Returns the profile.
+ */
+export async function ensureProfileForCurrentUser(): Promise<User> {
+  const supabase = getSupabase();
+  const { data: sess } = await supabase.auth.getSession();
+  const u = sess.session?.user;
+  if (!u) throw new Error('Not signed in');
+
+  const meta = (u.user_metadata ?? {}) as Record<string, any>;
+  const displayName = meta.full_name || meta.name || u.email?.split('@')[0] || 'New member';
+  const avatar = typeof meta.avatar_url === 'string' ? meta.avatar_url : undefined;
+
+  await supabase.from('profiles').upsert({
+    id: u.id,
+    email: u.email || `${u.id}@google.local`,
+    name: displayName,
+    photo_url: avatar ?? null,
+    profile_complete: false,
+  }, { onConflict: 'id', ignoreDuplicates: true });
+
+  return fetchProfile(u.id);
 }
 
 /** Deep link the password-reset email points back to */
@@ -174,21 +247,27 @@ export async function updatePassword(newPassword: string): Promise<void> {
 }
 
 /**
- * Parse an incoming recovery deep link and establish the recovery session so
- * the user can set a new password. Returns true when the URL was a recovery link.
+ * Handle an incoming auth deep link — either a password-recovery link or an
+ * OAuth (Google) callback. Both carry the tokens in the URL fragment, so we
+ * parse once and report which kind it was.
  */
-export async function handleRecoveryUrl(url: string): Promise<boolean> {
-  if (!url) return false;
+export async function handleAuthCallbackUrl(url: string): Promise<'recovery' | 'signin' | null> {
+  if (!url) return null;
   const hashIndex = url.indexOf('#');
-  if (hashIndex === -1) return false;
+  if (hashIndex === -1) return null;
   const params = new URLSearchParams(url.substring(hashIndex + 1));
-  if (params.get('type') !== 'recovery') return false;
   const access_token = params.get('access_token');
   const refresh_token = params.get('refresh_token');
-  if (!access_token || !refresh_token) return false;
+  if (!access_token || !refresh_token) return null;
+
   const { error } = await getSupabase().auth.setSession({ access_token, refresh_token });
   if (error) throw error;
-  return true;
+  return params.get('type') === 'recovery' ? 'recovery' : 'signin';
+}
+
+/** Back-compat wrapper — true only for password-recovery links. */
+export async function handleRecoveryUrl(url: string): Promise<boolean> {
+  return (await handleAuthCallbackUrl(url)) === 'recovery';
 }
 
 /** Compute age from a yyyy-mm-dd, dd/mm/yyyy or any Date-parseable string */

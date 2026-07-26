@@ -6,7 +6,7 @@
  * signed-in user's session, so RLS guarantees users only see their own rows.
  */
 import { getSupabase, supabaseEnabled, BUCKETS } from './supabase';
-import { uploadLocalFile, isLocalUri } from './storage-upload';
+import { uploadLocalFile, isLocalUri, remoteOnly } from './storage-upload';
 import type { Proposal } from '@/store/proposals';
 import type { ConfirmedDate } from '@/store/dates';
 import type { Venue } from '@/constants/london';
@@ -57,7 +57,7 @@ function rowToProposal(row: any): Proposal {
       age: sender.age ?? 0,
       area: sender.city ?? 'London',
       job: '',
-      photoUrl: sender.photo_url ?? '',
+      photoUrl: remoteOnly([sender.photo_url])[0] ?? '',
       verified: sender.verification_status === 'verified',
       lat: 51.5072,
       lng: -0.1276,
@@ -346,10 +346,11 @@ export async function fetchMembers(limit = 100): Promise<ServerProfile[]> {
     gender: p.gender ?? undefined,
     genderInterest: p.gender_interest ?? undefined,
     interests: Array.isArray(p.interests) ? p.interests : undefined,
-    photoUrl: p.photo_url ?? undefined,
-    photos: Array.isArray(p.photos) && p.photos.length
-      ? p.photos
-      : (p.photo_url ? [p.photo_url] : []),
+    // Drop unusable device-local paths so cards show a placeholder instead
+    photoUrl: remoteOnly([p.photo_url])[0],
+    photos: remoteOnly(
+      Array.isArray(p.photos) && p.photos.length ? p.photos : [p.photo_url],
+    ),
     verified: p.verification_status === 'verified',
   }));
 }

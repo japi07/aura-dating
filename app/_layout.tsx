@@ -4,7 +4,7 @@ import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
-import { handleRecoveryUrl } from '@/lib/auth-supabase';
+import { handleAuthCallbackUrl, ensureProfileForCurrentUser } from '@/lib/auth-supabase';
 import { useAuthStore } from '@/store/auth';
 import { useProposalsStore } from '@/store/proposals';
 import { useDatesStore } from '@/store/dates';
@@ -18,6 +18,7 @@ import {
   scheduleDailyProposalReminder,
 } from '@/lib/notifications';
 import { savePushTokenToServer } from '@/lib/profile-supabase';
+import { getSupabase } from '@/lib/supabase';
 
 /**
  * Catches any render-time crash and shows the actual error instead of a
@@ -58,7 +59,7 @@ function BootSplash() {
 }
 
 export default function RootLayout() {
-  const { token, user, hydrate } = useAuthStore();
+  const { token, user, hydrate, setToken, setUser } = useAuthStore();
   const hydrateProposals = useProposalsStore((s) => s.hydrate);
   const hydrateDates = useDatesStore((s) => s.hydrate);
   const hydrateSettings = useSettingsStore((s) => s.hydrate);
@@ -71,13 +72,22 @@ export default function RootLayout() {
   const router = useRouter();
   const [isReady, setIsReady] = useState(false);
 
-  // Password-reset deep link: parse the recovery token, set the session, and
-  // route to the reset screen so the user can choose a new password.
+  // Auth deep links: password-recovery links go to the reset screen; OAuth
+  // (Google) callbacks establish the session and land the user in the app.
   useEffect(() => {
     const handle = async (url: string | null) => {
       if (!url) return;
       try {
-        if (await handleRecoveryUrl(url)) router.replace('/reset-password');
+        const kind = await handleAuthCallbackUrl(url);
+        if (kind === 'recovery') {
+          router.replace('/reset-password');
+        } else if (kind === 'signin') {
+          const profile = await ensureProfileForCurrentUser();
+          const { data } = await getSupabase().auth.getSession();
+          if (data.session) await setToken(data.session.access_token);
+          setUser(profile);
+          router.replace('/');
+        }
       } catch { /* expired or malformed link — ignore */ }
     };
     Linking.getInitialURL().then(handle);

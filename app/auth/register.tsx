@@ -12,6 +12,7 @@ import { authApi } from '@/lib/api';
 import { signUpWithEmail, signInWithApple } from '@/lib/auth-supabase';
 import { supabaseEnabled } from '@/lib/supabase';
 import { AppleSignInButton } from '@/components/AppleSignInButton';
+import { GoogleSignInButton } from '@/components/GoogleSignInButton';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { InterestTag } from '@/components/InterestTag';
@@ -316,6 +317,9 @@ export default function RegisterScreen() {
                   }
                 }}
                 onError={(e) => Alert.alert('Apple sign-in failed', e?.message || 'Please try again.')}
+              />
+              <GoogleSignInButton
+                onError={(e: any) => Alert.alert('Google sign-in failed', e?.message || 'Please try again.')}
               />
             </View>
           </View>

@@ -13,6 +13,7 @@ import { Input } from '@/components/Input';
 import { DateField } from '@/components/DateField';
 import { TimeField } from '@/components/TimeField';
 import { MemberCard } from '@/components/MemberCard';
+import { MemberDetailSheet } from '@/components/MemberDetailSheet';
 import { pickAttachment, iconForMime, type PickedAttachment } from '@/lib/attachment-picker';
 import { useAuthStore } from '@/store/auth';
 import { useProposalsStore } from '@/store/proposals';
@@ -55,6 +56,9 @@ export default function CreateProposalScreen() {
       ? recipients.find(r => r.email === (params.recipientEmail as string)?.toLowerCase()) ?? null
       : null,
   );
+  // Full-profile preview before committing to a proposal
+  const [previewing, setPreviewing] = useState<DirectoryUser | null>(null);
+
   const [message, setMessage] = useState('');
   const [dateType, setDateType] = useState('');
   const [venue, setVenue] = useState('');
@@ -319,22 +323,32 @@ export default function CreateProposalScreen() {
                       width={CARD_W}
                       person={r}
                       selected={isOn}
-                      onPress={() => setSelectedRecipient(r)}
+                      onPress={() => setPreviewing(r)}
                       footer={
-                        <TouchableOpacity
-                          style={[styles.chooseBtn, isOn && styles.chooseBtnOn]}
-                          onPress={() => setSelectedRecipient(r)}
-                          activeOpacity={0.85}
-                        >
-                          <Ionicons
-                            name={isOn ? 'checkmark-circle' : 'heart-outline'}
-                            size={17}
-                            color={isOn ? '#fff' : COLORS.BRAND}
-                          />
-                          <Text style={[styles.chooseText, isOn && styles.chooseTextOn]}>
-                            {isOn ? 'Selected' : 'Propose to ' + r.name.split(' ')[0]}
-                          </Text>
-                        </TouchableOpacity>
+                        <View style={{ gap: 8 }}>
+                          <TouchableOpacity
+                            style={styles.viewBtn}
+                            onPress={() => setPreviewing(r)}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="expand-outline" size={15} color={COLORS.TEXT_SECONDARY} />
+                            <Text style={styles.viewText}>View full profile</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.chooseBtn, isOn && styles.chooseBtnOn]}
+                            onPress={() => setSelectedRecipient(r)}
+                            activeOpacity={0.85}
+                          >
+                            <Ionicons
+                              name={isOn ? 'checkmark-circle' : 'heart-outline'}
+                              size={17}
+                              color={isOn ? '#fff' : COLORS.BRAND}
+                            />
+                            <Text style={[styles.chooseText, isOn && styles.chooseTextOn]}>
+                              {isOn ? 'Selected' : 'Propose to ' + r.name.split(' ')[0]}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
                       }
                     />
                   );
@@ -503,6 +517,18 @@ export default function CreateProposalScreen() {
 
         <Button title="Send Proposal" onPress={handleSend} loading={loading} size="lg" style={{ width: '100%', marginTop: 4 }} />
       </ScrollView>
+
+      {/* Full profile preview */}
+      <MemberDetailSheet
+        person={previewing}
+        visible={!!previewing}
+        onClose={() => setPreviewing(null)}
+        ctaLabel={previewing ? `Propose to ${previewing.name.split(' ')[0]}` : undefined}
+        onCta={() => {
+          if (previewing) setSelectedRecipient(previewing);
+          setPreviewing(null);
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -576,6 +602,12 @@ const styles = StyleSheet.create({
   chooseBtnOn: { backgroundColor: COLORS.BRAND, borderColor: COLORS.BRAND },
   chooseText: { fontSize: 13, fontWeight: '800', color: COLORS.BRAND },
   chooseTextOn: { color: '#fff' },
+  viewBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 10, borderRadius: 12,
+    backgroundColor: COLORS.BG, borderWidth: 1, borderColor: COLORS.BORDER,
+  },
+  viewText: { fontSize: 12, fontWeight: '700', color: COLORS.TEXT_SECONDARY },
 
   recipientList: { gap: 8 },
   recipientRow: {
