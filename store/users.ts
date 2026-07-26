@@ -25,6 +25,8 @@ export interface DirectoryUser {
   genderInterest?: string;
   interests?: string[];
   photoUrl?: string;
+  /** Full photo gallery (primary is photos[0]) */
+  photos?: string[];
   verified?: boolean;
   /** When the entry was added or last refreshed */
   updatedAt: string;
@@ -40,8 +42,11 @@ interface UsersState {
   upsertUser: (u: User) => Promise<void>;
   /** Remove from directory by email */
   removeUser: (email: string) => Promise<void>;
-  /** All users except the given email */
-  candidatesFor: (currentUserEmail: string, opts?: { genderInterest?: string }) => DirectoryUser[];
+  /** All users except the given email, filtered by mutual gender interest */
+  candidatesFor: (
+    currentUserEmail: string,
+    opts?: { genderInterest?: string; myGender?: string },
+  ) => DirectoryUser[];
 }
 
 const persist = async (users: DirectoryUser[]) => AsyncStorage.setItem(KEY, JSON.stringify(users));
@@ -79,6 +84,7 @@ export const useUsersStore = create<UsersState>((set, get) => ({
         genderInterest: m.genderInterest?.toLowerCase(),
         interests: m.interests,
         photoUrl: m.photoUrl,
+        photos: m.photos,
         verified: m.verified,
         updatedAt: now,
       }));
@@ -106,6 +112,7 @@ export const useUsersStore = create<UsersState>((set, get) => ({
       genderInterest: u.genderInterest?.toLowerCase(),
       interests: u.interests,
       photoUrl: u.photoUrl,
+      photos: u.photos,
       verified: u.verified,
       updatedAt: new Date().toISOString(),
     };
@@ -125,13 +132,22 @@ export const useUsersStore = create<UsersState>((set, get) => ({
   candidatesFor: (currentUserEmail: string, opts) => {
     const lc = currentUserEmail?.toLowerCase().trim();
     const gi = opts?.genderInterest?.toLowerCase();
+    const myGender = opts?.myGender?.toLowerCase();
+
     return get().users
       .filter(u => u.email !== lc)
       .filter(u => {
-        // If we know what the sender is interested in, only show matching gender.
-        // 'everyone' / unspecified => no filter.
-        if (!gi || gi === 'everyone') return true;
-        return !u.gender || u.gender === gi;
+        // 1. Do I want to see them? Only show genders I'm interested in.
+        //    Unknown gender is excluded rather than shown to everyone.
+        if (gi && gi !== 'everyone') {
+          if (!u.gender || u.gender !== gi) return false;
+        }
+        // 2. Would they want to see me? Respect their stated preference too,
+        //    so people aren't shown to those they'd never match with.
+        if (myGender && u.genderInterest && u.genderInterest !== 'everyone') {
+          if (u.genderInterest !== myGender) return false;
+        }
+        return true;
       })
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   },

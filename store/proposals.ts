@@ -55,6 +55,10 @@ export interface Proposal {
   videoPoster?: string;
   /** Video duration in seconds (recorded) */
   videoDurationSec?: number;
+  /** Optional attachment (PDF / PPT / image) with the date plan */
+  attachmentUrl?: string;
+  attachmentName?: string;
+  attachmentType?: string;
 }
 
 export type Decision = 'accepted' | 'declined' | 'expired';
@@ -173,6 +177,9 @@ export const useProposalsStore = create<ProposalsState>((set, get) => ({
         videoDurationSec: data.videoDurationSec,
         matchScore: data.matchScore,
         matchReason: data.matchReason,
+        attachmentUrl: data.attachmentUrl,
+        attachmentName: data.attachmentName,
+        attachmentType: data.attachmentType,
       });
       const next = [proposal, ...get().proposals.filter(p => p.id !== proposal.id)];
       set({ proposals: next });

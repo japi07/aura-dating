@@ -72,6 +72,11 @@ create table if not exists public.proposals (
   video_duration_sec int,
   video_poster_url text,
 
+  -- Optional attachment (PDF / PPT / image) with the date plan
+  attachment_url  text,
+  attachment_name text,
+  attachment_type text,
+
   -- Match metadata (computed by the matchmaking pipeline)
   match_score     int default 0,
   match_reason    text,
@@ -409,6 +414,7 @@ insert into storage.buckets (id, name, public)
 values
   ('profile-photos',       'profile-photos',       true),
   ('proposal-videos',      'proposal-videos',      true),
+  ('proposal-attachments', 'proposal-attachments', true),
   ('verification-photos',  'verification-photos',  false),
   ('verification-videos',  'verification-videos',  false)
 on conflict (id) do nothing;

@@ -52,4 +52,5 @@ export const BUCKETS = {
   VERIFICATION_PHOTOS: 'verification-photos',  // private
   VERIFICATION_VIDEOS: 'verification-videos',  // private
   PROPOSAL_VIDEOS: 'proposal-videos',
+  PROPOSAL_ATTACHMENTS: 'proposal-attachments',
 };

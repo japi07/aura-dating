@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, KeyboardAvoidingView,
-  Platform, Alert, TouchableOpacity, Image,
+  Platform, Alert, TouchableOpacity, Image, Dimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,8 @@ import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { DateField } from '@/components/DateField';
 import { TimeField } from '@/components/TimeField';
+import { MemberCard } from '@/components/MemberCard';
+import { pickAttachment, iconForMime, type PickedAttachment } from '@/lib/attachment-picker';
 import { useAuthStore } from '@/store/auth';
 import { useProposalsStore } from '@/store/proposals';
 import { useUsersStore, type DirectoryUser } from '@/store/users';
@@ -23,6 +25,9 @@ const DATE_TYPES = [
   { key: 'Nature', emoji: '🌿', label: 'Nature Walk' },
   { key: 'Activity', emoji: '🎨', label: 'Activity' },
 ];
+
+// Card slightly narrower than the screen so the next profile peeks in
+const CARD_W = Dimensions.get('window').width - 84;
 
 const PAYMENT_OPTIONS = [
   { key: 'I\'ll Pay', icon: 'gift-outline', label: 'I\'ll treat you' },
@@ -42,7 +47,7 @@ export default function CreateProposalScreen() {
   useEffect(() => { if (!usersHydrated) hydrateUsers(); }, []);
 
   const recipients: DirectoryUser[] = user?.email
-    ? candidatesFor(user.email, { genderInterest: user.genderInterest })
+    ? candidatesFor(user.email, { genderInterest: user.genderInterest, myGender: user.gender })
     : [];
 
   const [selectedRecipient, setSelectedRecipient] = useState<DirectoryUser | null>(
@@ -62,6 +67,18 @@ export default function CreateProposalScreen() {
   const [videoUri, setVideoUri] = useState<string | null>(null);
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const [recording, setRecording] = useState(false);
+
+  // Optional attachment — a deck, PDF, or image with the date plan
+  const [attachment, setAttachment] = useState<PickedAttachment | null>(null);
+
+  const chooseAttachment = async () => {
+    try {
+      const picked = await pickAttachment();
+      if (picked) setAttachment(picked);
+    } catch (e: any) {
+      Alert.alert('Could not attach', e?.message || 'Please try again.');
+    }
+  };
 
   const previewPlayer = useVideoPlayer(videoUri ?? '', (p) => {
     p.loop = true;
@@ -241,6 +258,9 @@ export default function CreateProposalScreen() {
         videoUrl: videoUri!,
         videoPoster: undefined,
         videoDurationSec: videoDuration ?? undefined,
+        attachmentUrl: attachment?.uri,
+        attachmentName: attachment?.name,
+        attachmentType: attachment?.mimeType,
       });
 
       Alert.alert(
@@ -280,43 +300,47 @@ export default function CreateProposalScreen() {
               </Text>
             </View>
           ) : (
-            <View style={styles.recipientList}>
-              {recipients.map((r) => {
-                const selected = selectedRecipient?.email === r.email;
-                return (
-                  <TouchableOpacity
-                    key={r.email}
-                    style={[styles.recipientRow, selected && styles.recipientRowOn]}
-                    onPress={() => setSelectedRecipient(r)}
-                    activeOpacity={0.85}
-                  >
-                    {r.photoUrl ? (
-                      <Image source={{ uri: r.photoUrl }} style={styles.recipientAvatar} />
-                    ) : (
-                      <View style={[styles.recipientAvatar, styles.recipientAvatarPlaceholder]}>
-                        <Ionicons name="person" size={18} color={COLORS.TEXT_MUTED} />
-                      </View>
-                    )}
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.recipientNameRow}>
-                        <Text style={styles.recipientName}>
-                          {r.name}{r.age ? `, ${r.age}` : ''}
-                        </Text>
-                        {r.verified && <Ionicons name="shield-checkmark" size={13} color={COLORS.LIKE} />}
-                      </View>
-                      {(r.city || r.gender) ? (
-                        <Text style={styles.recipientMeta} numberOfLines={1}>
-                          {[r.gender, r.city].filter(Boolean).join(' · ')}
-                        </Text>
-                      ) : null}
-                    </View>
-                    <View style={[styles.radio, selected && styles.radioOn]}>
-                      {selected && <View style={styles.radioDot} />}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            <>
+              <Text style={styles.swipeHint}>
+                {recipients.length > 1 ? 'Swipe to browse · tap to choose' : 'Tap to choose'}
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                snapToInterval={CARD_W + 12}
+                decelerationRate="fast"
+                contentContainerStyle={styles.cardRail}
+              >
+                {recipients.map((r) => {
+                  const isOn = selectedRecipient?.email === r.email;
+                  return (
+                    <MemberCard
+                      key={r.email}
+                      width={CARD_W}
+                      person={r}
+                      selected={isOn}
+                      onPress={() => setSelectedRecipient(r)}
+                      footer={
+                        <TouchableOpacity
+                          style={[styles.chooseBtn, isOn && styles.chooseBtnOn]}
+                          onPress={() => setSelectedRecipient(r)}
+                          activeOpacity={0.85}
+                        >
+                          <Ionicons
+                            name={isOn ? 'checkmark-circle' : 'heart-outline'}
+                            size={17}
+                            color={isOn ? '#fff' : COLORS.BRAND}
+                          />
+                          <Text style={[styles.chooseText, isOn && styles.chooseTextOn]}>
+                            {isOn ? 'Selected' : 'Propose to ' + r.name.split(' ')[0]}
+                          </Text>
+                        </TouchableOpacity>
+                      }
+                    />
+                  );
+                })}
+              </ScrollView>
+            </>
           )}
 
           {errors.recipient && <Text style={styles.err}>{errors.recipient}</Text>}
@@ -385,6 +409,34 @@ export default function CreateProposalScreen() {
             <View style={styles.tipChip}><Ionicons name="sunny-outline" size={11} color={COLORS.GOLD_DEEP} /><Text style={styles.tipText}>Good light</Text></View>
             <View style={styles.tipChip}><Ionicons name="time-outline" size={11} color={COLORS.GOLD_DEEP} /><Text style={styles.tipText}>Keep it short</Text></View>
           </View>
+        </View>
+
+        {/* Optional attachment — a deck / PDF / image with the plan */}
+        <View style={styles.card}>
+          <Text style={styles.sectionLbl}>Attach your plan (optional)</Text>
+          <Text style={styles.hintText}>
+            Going the extra mile? Attach a little deck, an itinerary, a playlist screenshot — anything that shows you put thought in.
+          </Text>
+
+          {attachment ? (
+            <View style={styles.attachRow}>
+              <View style={styles.attachIcon}>
+                <Ionicons name={iconForMime(attachment.mimeType) as any} size={20} color={COLORS.BRAND} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.attachName} numberOfLines={1}>{attachment.name}</Text>
+                <Text style={styles.attachMeta}>Attached</Text>
+              </View>
+              <TouchableOpacity onPress={() => setAttachment(null)} style={styles.attachRemove}>
+                <Ionicons name="close" size={16} color={COLORS.ERROR} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.attachBtn} onPress={chooseAttachment} activeOpacity={0.8}>
+              <Ionicons name="attach" size={18} color={COLORS.BRAND} />
+              <Text style={styles.attachBtnText}>Add a file</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Caption to accompany the video */}
@@ -489,7 +541,42 @@ const styles = StyleSheet.create({
   hintText: { fontSize: 11, color: COLORS.TEXT_MUTED, lineHeight: 16, marginTop: 4 },
   row: { flexDirection: 'row', gap: 10 },
 
-  /* Recipient picker */
+  /* Attachment */
+  attachBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 14, borderRadius: 14, marginTop: 10,
+    backgroundColor: COLORS.BRAND_MUTED,
+    borderWidth: 1.5, borderColor: COLORS.BRAND, borderStyle: 'dashed',
+  },
+  attachBtnText: { fontSize: 13, fontWeight: '800', color: COLORS.BRAND },
+  attachRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10,
+    padding: 12, borderRadius: 14, backgroundColor: COLORS.BG,
+    borderWidth: 1, borderColor: COLORS.BORDER_LIGHT,
+  },
+  attachIcon: {
+    width: 40, height: 40, borderRadius: 12, backgroundColor: COLORS.BRAND_MUTED,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  attachName: { fontSize: 13, fontWeight: '700', color: COLORS.TEXT },
+  attachMeta: { fontSize: 11, color: COLORS.LIKE, fontWeight: '700', marginTop: 2 },
+  attachRemove: {
+    width: 30, height: 30, borderRadius: 10, backgroundColor: COLORS.ERROR_LIGHT,
+    justifyContent: 'center', alignItems: 'center',
+  },
+
+  /* Recipient picker — browsable profile cards */
+  swipeHint: { fontSize: 11, color: COLORS.TEXT_MUTED, marginBottom: 10, fontWeight: '600' },
+  cardRail: { gap: 12, paddingRight: 4, paddingBottom: 4 },
+  chooseBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+    paddingVertical: 12, borderRadius: 14,
+    backgroundColor: COLORS.BRAND_MUTED, borderWidth: 1.5, borderColor: COLORS.BRAND,
+  },
+  chooseBtnOn: { backgroundColor: COLORS.BRAND, borderColor: COLORS.BRAND },
+  chooseText: { fontSize: 13, fontWeight: '800', color: COLORS.BRAND },
+  chooseTextOn: { color: '#fff' },
+
   recipientList: { gap: 8 },
   recipientRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,

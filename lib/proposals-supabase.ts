@@ -73,6 +73,9 @@ function rowToProposal(row: any): Proposal {
     videoUrl: row.video_url,
     videoPoster: row.video_poster_url ?? undefined,
     videoDurationSec: row.video_duration_sec ?? undefined,
+    attachmentUrl: row.attachment_url ?? undefined,
+    attachmentName: row.attachment_name ?? undefined,
+    attachmentType: row.attachment_type ?? undefined,
   };
 }
 
@@ -132,6 +135,9 @@ export async function createProposalOnServer(input: {
   videoDurationSec?: number;
   matchScore?: number;
   matchReason?: string;
+  attachmentUrl?: string;
+  attachmentName?: string;
+  attachmentType?: string;
 }): Promise<Proposal> {
   const supabase = getSupabase();
   const uid = await getSessionUserId();
@@ -159,6 +165,18 @@ export async function createProposalOnServer(input: {
     });
   }
 
+  // Optional attachment (deck / PDF / image) — push to storage if still local
+  let attachmentUrl = input.attachmentUrl;
+  if (isLocalUri(attachmentUrl)) {
+    const safeName = (input.attachmentName || 'attachment').replace(/[^\w.\-]/g, '_');
+    attachmentUrl = await uploadLocalFile({
+      bucket: BUCKETS.PROPOSAL_ATTACHMENTS,
+      path: `${uid}/${Date.now()}_${safeName}`,
+      localUri: attachmentUrl!,
+      contentType: input.attachmentType || 'application/octet-stream',
+    });
+  }
+
   const { data, error } = await supabase
     .from('proposals')
     .insert({
@@ -180,6 +198,9 @@ export async function createProposalOnServer(input: {
       video_duration_sec: input.videoDurationSec ?? null,
       match_score: input.matchScore ?? 0,
       match_reason: input.matchReason ?? null,
+      attachment_url: attachmentUrl ?? null,
+      attachment_name: input.attachmentName ?? null,
+      attachment_type: input.attachmentType ?? null,
     })
     .select(`*,
       sender:profiles!proposals_sender_id_fkey(${PROFILE_COLS}),
@@ -299,6 +320,7 @@ export interface ServerProfile {
   genderInterest?: string;
   interests?: string[];
   photoUrl?: string;
+  photos?: string[];
   verified?: boolean;
 }
 
@@ -309,7 +331,7 @@ export async function fetchMembers(limit = 100): Promise<ServerProfile[]> {
   if (!uid) return [];
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, name, age, city, bio, gender, gender_interest, interests, photo_url, verification_status')
+    .select('id, email, name, age, city, bio, gender, gender_interest, interests, photo_url, photos, verification_status')
     .neq('id', uid)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -325,6 +347,9 @@ export async function fetchMembers(limit = 100): Promise<ServerProfile[]> {
     genderInterest: p.gender_interest ?? undefined,
     interests: Array.isArray(p.interests) ? p.interests : undefined,
     photoUrl: p.photo_url ?? undefined,
+    photos: Array.isArray(p.photos) && p.photos.length
+      ? p.photos
+      : (p.photo_url ? [p.photo_url] : []),
     verified: p.verification_status === 'verified',
   }));
 }

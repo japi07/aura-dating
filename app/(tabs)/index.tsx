@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, TouchableOpacity,
   Image, StatusBar, Alert, RefreshControl, ActivityIndicator,
-  Animated, Dimensions, Easing,
+  Animated, Dimensions, Easing, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,6 +17,7 @@ import { getCurrentLocation, distanceKm, formatDistance } from '@/lib/location';
 import { scheduleDateReminders } from '@/lib/notifications';
 import { addDateToCalendar } from '@/lib/calendar';
 import { blockUserOnServer, reportUserOnServer } from '@/lib/profile-supabase';
+import { iconForMime } from '@/lib/attachment-picker';
 import {
   formatDate, formatTime, formatCountdown,
   greeting, todayLong, paymentLabel,
@@ -61,6 +62,12 @@ export default function TodayScreen() {
   const proposals = user?.email ? pendingForUser(user.email) : [];
   const proposal = proposals[0]; // Show one at a time — quality over quantity
   const reviewedToday = !proposal && Object.keys(decisions).length > 0;
+  /**
+   * Aura is invitation-first: men send proposals, women receive one curated
+   * proposal a day. So the "your next proposal arrives in Xh" countdown only
+   * makes sense for recipients — senders get a compose-oriented empty state.
+   */
+  const isSender = (user?.gender || '').toLowerCase() === 'male';
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -352,6 +359,27 @@ export default function TodayScreen() {
                   <Text style={styles.captionText}>{proposal.message}</Text>
                 </View>
 
+                {/* Attachment — his plan / deck, if he sent one */}
+                {!!proposal.attachmentUrl && (
+                  <TouchableOpacity
+                    style={styles.attachCard}
+                    onPress={() => Linking.openURL(proposal.attachmentUrl!).catch(() =>
+                      Alert.alert('Could not open', 'This attachment could not be opened.'))}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.attachCardIcon}>
+                      <Ionicons name={iconForMime(proposal.attachmentType) as any} size={20} color="#fff" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.attachCardTitle} numberOfLines={1}>
+                        {proposal.attachmentName || 'He attached his plan'}
+                      </Text>
+                      <Text style={styles.attachCardSub}>Tap to open</Text>
+                    </View>
+                    <Ionicons name="open-outline" size={17} color={COLORS.BRAND} />
+                  </TouchableOpacity>
+                )}
+
                 {/* Why we matched — gold-trim card */}
                 <View style={styles.whyCard}>
                   <View style={styles.whyHeader}>
@@ -400,17 +428,25 @@ export default function TodayScreen() {
                   style={StyleSheet.absoluteFillObject}
                 />
                 <View style={styles.doneSparkle}>
-                  <Ionicons name={reviewedToday ? 'moon' : 'mail-open-outline'} size={36} color={COLORS.BRAND} />
+                  <Ionicons
+                    name={isSender ? 'videocam-outline' : reviewedToday ? 'moon' : 'mail-open-outline'}
+                    size={36}
+                    color={COLORS.BRAND}
+                  />
                 </View>
                 <Text style={styles.doneTitle}>
-                  {reviewedToday ? 'Until tomorrow' : 'No proposals yet'}
+                  {isSender
+                    ? 'Ask someone out'
+                    : reviewedToday ? 'Until tomorrow' : 'No proposals yet'}
                 </Text>
                 <Text style={styles.doneSub}>
-                  {reviewedToday
-                    ? 'Your next curated proposal will arrive in'
-                    : 'When a verified man sends you a proposal,\nit will appear here.'}
+                  {isSender
+                    ? 'Pick someone, plan a real date, and\nrecord a short video introduction.'
+                    : reviewedToday
+                      ? 'Your next curated proposal will arrive in'
+                      : 'When a verified man sends you a proposal,\nit will appear here.'}
                 </Text>
-                {reviewedToday && (
+                {!isSender && reviewedToday && (
                   <View style={styles.countdownBig}>
                     <Text style={styles.countdownNum}>{hoursUntilTomorrow()}</Text>
                     <Text style={styles.countdownLabel}>hours</Text>
@@ -579,6 +615,18 @@ const styles = StyleSheet.create({
     flex: 1, fontSize: 13, color: COLORS.TEXT_SECONDARY, lineHeight: 20,
     fontStyle: 'italic',
   },
+
+  attachCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: COLORS.BRAND_MUTED, borderRadius: 16, padding: 14, marginBottom: 18,
+    borderWidth: 1, borderColor: COLORS.BRAND + '30',
+  },
+  attachCardIcon: {
+    width: 40, height: 40, borderRadius: 13, backgroundColor: COLORS.BRAND,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  attachCardTitle: { fontSize: 14, fontWeight: '800', color: COLORS.TEXT },
+  attachCardSub: { fontSize: 11, color: COLORS.BRAND, fontWeight: '700', marginTop: 2 },
 
   whyCard: {
     backgroundColor: COLORS.BRAND_MUTED, borderRadius: 18, padding: 16, marginBottom: 18,
