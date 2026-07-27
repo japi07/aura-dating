@@ -36,6 +36,15 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="discover"
+        options={{
+          title: 'Discover',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name={focused ? 'people' : 'people-outline'} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="events"
         options={{
           title: 'Events',
