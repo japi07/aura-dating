@@ -13,10 +13,14 @@ import {
   fetchMyDates,
   cancelDateOnServer,
   rateDateOnServer,
+  setDateInterestOnServer,
   getSessionUserId,
 } from '@/lib/proposals-supabase';
 
 const STORAGE_KEY = 'aura.dates.v1';
+
+/** Answer to "would you like to exchange numbers?" after a date */
+export type DateInterest = 'yes' | 'no' | 'already';
 
 export interface ConfirmedDate {
   id: string;
@@ -28,11 +32,13 @@ export interface ConfirmedDate {
   };
   category: string;
   startsAt: string; // ISO
-  payment: 'he-pays' | 'split' | 'she-pays';
+  payment: 'he-pays' | 'split' | 'she-pays' | 'free';
   reminderIds: string[];
   status: 'upcoming' | 'completed' | 'cancelled';
   rating?: 1 | 2 | 3 | 4 | 5;
   ratedAt?: string;
+  /** Post-date follow-up: would I like to exchange numbers with them? */
+  interest?: DateInterest;
   /** Which side of the server row I am — needed to write my rating column */
   serverRole?: 'a' | 'b';
 }
@@ -45,6 +51,8 @@ interface DatesState {
   addDate: (proposal: Proposal, reminderIds: string[]) => Promise<ConfirmedDate>;
   cancelDate: (id: string) => Promise<void>;
   rateDate: (id: string, rating: 1 | 2 | 3 | 4 | 5) => Promise<void>;
+  /** Record whether I'd like to exchange numbers after the date */
+  setDateInterest: (id: string, interest: DateInterest) => Promise<void>;
   upcoming: () => ConfirmedDate[];
   past: () => ConfirmedDate[];
 }
@@ -174,6 +182,16 @@ export const useDatesStore = create<DatesState>((set, get) => ({
     await persist(dates);
     if (target && !id.startsWith('date_') && target.serverRole) {
       try { await rateDateOnServer(id, target.serverRole, rating); } catch {}
+    }
+  },
+
+  setDateInterest: async (id, interest) => {
+    const target = get().dates.find(d => d.id === id);
+    const dates = get().dates.map(d => d.id === id ? { ...d, interest } : d);
+    set({ dates });
+    await persist(dates);
+    if (target && !id.startsWith('date_') && target.serverRole) {
+      try { await setDateInterestOnServer(id, target.serverRole, interest); } catch {}
     }
   },
 

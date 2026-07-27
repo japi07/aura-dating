@@ -129,7 +129,7 @@ export async function createProposalOnServer(input: {
   recipientEmail: string;
   venue: Venue;
   startsAt: string;
-  payment: 'he-pays' | 'split' | 'she-pays';
+  payment: 'he-pays' | 'split' | 'she-pays' | 'free';
   message: string;
   videoUrl: string;
   videoDurationSec?: number;
@@ -264,6 +264,7 @@ function rowToDate(row: any, myId: string): ConfirmedDate {
     status: (row.status === 'no-show' ? 'completed' : row.status) as ConfirmedDate['status'],
     rating: myRating ?? undefined,
     ratedAt: row.rated_at ?? undefined,
+    interest: (amUserA ? row.user_a_interest : row.user_b_interest) ?? undefined,
     serverRole: amUserA ? 'a' : 'b',
   };
 }
@@ -290,6 +291,18 @@ export async function cancelDateOnServer(dateId: string): Promise<void> {
     .from('dates')
     .update({ status: 'cancelled', cancelled_by: uid })
     .eq('id', dateId);
+  if (error) throw error;
+}
+
+/** Record my post-date answer to "would you like to exchange numbers?" */
+export async function setDateInterestOnServer(
+  dateId: string,
+  role: 'a' | 'b',
+  interest: 'yes' | 'no' | 'already',
+): Promise<void> {
+  const supabase = getSupabase();
+  const col = role === 'a' ? 'user_a_interest' : 'user_b_interest';
+  const { error } = await supabase.from('dates').update({ [col]: interest }).eq('id', dateId);
   if (error) throw error;
 }
 

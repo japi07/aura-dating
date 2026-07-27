@@ -68,10 +68,11 @@ export function todayLong(): string {
 }
 
 /** "He'll pay" / "Split equally" / "She'll pay" */
-export function paymentLabel(p: 'he-pays' | 'split' | 'she-pays'): string {
+export function paymentLabel(p: 'he-pays' | 'split' | 'she-pays' | 'free'): string {
   switch (p) {
     case 'he-pays': return 'He\'ll pay';
     case 'split': return 'Split equally';
     case 'she-pays': return 'You\'ll pay';
+    case 'free': return 'Nothing to pay';
   }
 }

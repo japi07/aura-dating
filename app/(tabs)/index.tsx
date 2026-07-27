@@ -31,6 +31,7 @@ export default function TodayScreen() {
   const {
     isHydrated, error, hydrate, refreshProposals,
     pendingForUser, acceptProposal, declineProposal, decisions,
+    proposals: allProposals,
   } = useProposalsStore();
   const { addDate, hydrate: hydrateDates } = useDatesStore();
   const [refreshing, setRefreshing] = useState(false);
@@ -66,8 +67,17 @@ export default function TodayScreen() {
    * Aura is invitation-first: men send proposals, women receive one curated
    * proposal a day. So the "your next proposal arrives in Xh" countdown only
    * makes sense for recipients — senders get a compose-oriented empty state.
+   *
+   * Gender alone isn't reliable (older accounts never saved one), so we also
+   * infer from behaviour: someone who has only ever sent proposals is a sender.
    */
-  const isSender = (user?.gender || '').toLowerCase() === 'male';
+  const myEmail = (user?.email || '').toLowerCase().trim();
+  const hasReceivedAny = allProposals.some(p => p?.recipientEmail?.toLowerCase?.() === myEmail);
+  const hasSentAny = allProposals.some(p => p?.from?.email?.toLowerCase?.() === myEmail);
+  const isSender =
+    (user?.gender || '').toLowerCase() === 'male' || (!hasReceivedAny && hasSentAny);
+  // Never promise a countdown to someone who has never received a proposal.
+  const showCountdown = !isSender && reviewedToday && hasReceivedAny;
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -429,7 +439,7 @@ export default function TodayScreen() {
                 />
                 <View style={styles.doneSparkle}>
                   <Ionicons
-                    name={isSender ? 'videocam-outline' : reviewedToday ? 'moon' : 'mail-open-outline'}
+                    name={isSender ? 'videocam-outline' : showCountdown ? 'moon' : 'mail-open-outline'}
                     size={36}
                     color={COLORS.BRAND}
                   />
@@ -437,16 +447,16 @@ export default function TodayScreen() {
                 <Text style={styles.doneTitle}>
                   {isSender
                     ? 'Ask someone out'
-                    : reviewedToday ? 'Until tomorrow' : 'No proposals yet'}
+                    : showCountdown ? 'Until tomorrow' : 'No proposals yet'}
                 </Text>
                 <Text style={styles.doneSub}>
                   {isSender
                     ? 'Pick someone, plan a real date, and\nrecord a short video introduction.'
-                    : reviewedToday
+                    : showCountdown
                       ? 'Your next curated proposal will arrive in'
-                      : 'When a verified man sends you a proposal,\nit will appear here.'}
+                      : 'When someone sends you a proposal,\nit will appear here.'}
                 </Text>
-                {!isSender && reviewedToday && (
+                {showCountdown && (
                   <View style={styles.countdownBig}>
                     <Text style={styles.countdownNum}>{hoursUntilTomorrow()}</Text>
                     <Text style={styles.countdownLabel}>hours</Text>

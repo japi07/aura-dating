@@ -47,7 +47,7 @@ export interface Proposal {
   matchReason: string;
   venue: Venue;
   startsAt: string; // ISO datetime
-  payment: 'he-pays' | 'split' | 'she-pays';
+  payment: 'he-pays' | 'split' | 'she-pays' | 'free';
   message: string;
   /** Mandatory short video introduction recorded by the proposer */
   videoUrl: string;

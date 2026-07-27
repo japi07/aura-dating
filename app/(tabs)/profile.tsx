@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store/auth';
 import { useProposalsStore } from '@/store/proposals';
 import { useDatesStore } from '@/store/dates';
 import { COLORS } from '@/constants/colors';
+import { MemberCard } from '@/components/MemberCard';
 
 const SW = Dimensions.get('window').width;
 
@@ -114,54 +115,44 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Hero card */}
-        <View style={styles.heroCard}>
-          <View style={styles.heroPhotoWrap}>
-            {profile.photoUrl ? (
-              <Image source={{ uri: profile.photoUrl }} style={styles.heroPhoto} />
-            ) : (
-              <View style={[styles.heroPhoto, styles.heroPhotoPlaceholder]}>
-                <Ionicons name="person" size={40} color={COLORS.TEXT_MUTED} />
+        {/* Your card — exactly how other members see you */}
+        <View style={styles.cardWrap}>
+          <Text style={styles.previewLabel}>How others see you</Text>
+          <MemberCard
+            width={SW - 32}
+            person={{
+              name: profile.name,
+              age: profile.age,
+              city: profile.city,
+              bio: profile.bio,
+              interests: profile.interests,
+              photoUrl: profile.photoUrl,
+              photos: profile.photos,
+              verified: isVerified,
+            }}
+            onPress={() => router.push('/profile/edit')}
+            footer={
+              <View style={styles.cardActions}>
+                <TouchableOpacity
+                  style={styles.editCardBtn}
+                  onPress={() => router.push('/profile/edit')}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="create-outline" size={16} color="#fff" />
+                  <Text style={styles.editCardText}>Edit profile</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.photoCardBtn}
+                  onPress={() => router.push('/profile/edit')}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="images-outline" size={16} color={COLORS.BRAND} />
+                  <Text style={styles.photoCardText}>Photos</Text>
+                </TouchableOpacity>
               </View>
-            )}
-            <TouchableOpacity style={styles.editPhotoBtn} onPress={() => router.push('/profile/edit')}>
-              <Ionicons name="camera" size={16} color="#fff" />
-            </TouchableOpacity>
-            {isVerified && (
-              <View style={styles.verifiedRing}>
-                <Ionicons name="shield-checkmark" size={16} color="#fff" />
-              </View>
-            )}
-          </View>
-
-          <View style={styles.heroInfo}>
-            <View style={styles.heroNameRow}>
-              <Text style={styles.heroName}>{profile.name}, {profile.age}</Text>
-              {isVerified && <Ionicons name="shield-checkmark" size={20} color={COLORS.LIKE} />}
-            </View>
-            <View style={styles.heroMeta}>
-              <Ionicons name="location-outline" size={14} color={COLORS.TEXT_MUTED} />
-              <Text style={styles.heroCity}>{profile.city}</Text>
-            </View>
-            <TouchableOpacity style={styles.editProfileBtn} onPress={() => router.push('/profile/edit')}>
-              <Text style={styles.editProfileText}>Edit Profile</Text>
-            </TouchableOpacity>
-          </View>
+            }
+          />
         </View>
-
-        {/* Photo gallery */}
-        {(profile.photos?.length ?? 0) > 1 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.galleryRow}
-            style={styles.gallery}
-          >
-            {profile.photos!.map((uri, i) => (
-              <Image key={`${uri}-${i}`} source={{ uri }} style={styles.galleryImg} />
-            ))}
-          </ScrollView>
-        )}
 
         {/* Verification CTA — only if not verified */}
         {!isVerified && (
@@ -323,9 +314,23 @@ const styles = StyleSheet.create({
   heroPhoto: { width: 90, height: 90, borderRadius: 45, borderWidth: 3, borderColor: COLORS.BRAND_MUTED },
   heroPhotoPlaceholder: { backgroundColor: COLORS.BRAND_MUTED, justifyContent: 'center', alignItems: 'center' },
 
-  gallery: { marginBottom: 14 },
-  galleryRow: { paddingHorizontal: 16, gap: 10 },
-  galleryImg: { width: 130, height: 170, borderRadius: 16, backgroundColor: COLORS.BRAND_MUTED },
+  cardWrap: { paddingHorizontal: 16, marginBottom: 16 },
+  previewLabel: {
+    fontSize: 11, fontWeight: '800', color: COLORS.TEXT_MUTED,
+    letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10,
+  },
+  cardActions: { flexDirection: 'row', gap: 8 },
+  editCardBtn: {
+    flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+    paddingVertical: 13, borderRadius: 14, backgroundColor: COLORS.BRAND,
+  },
+  editCardText: { fontSize: 13, fontWeight: '800', color: '#fff' },
+  photoCardBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 13, borderRadius: 14,
+    backgroundColor: COLORS.BRAND_MUTED, borderWidth: 1.5, borderColor: COLORS.BRAND,
+  },
+  photoCardText: { fontSize: 13, fontWeight: '800', color: COLORS.BRAND },
   editPhotoBtn: {
     position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14,
     backgroundColor: COLORS.BRAND, justifyContent: 'center', alignItems: 'center',

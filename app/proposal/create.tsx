@@ -31,9 +31,10 @@ const DATE_TYPES = [
 const CARD_W = Dimensions.get('window').width - 84;
 
 const PAYMENT_OPTIONS = [
-  { key: 'I\'ll Pay', icon: 'gift-outline', label: 'I\'ll treat you' },
-  { key: 'Split Equally', icon: 'git-branch-outline', label: 'We split equally' },
-  { key: 'They\'ll Pay', icon: 'wallet-outline', label: 'Your preference' },
+  { key: 'I\'ll Pay', icon: 'gift-outline', label: 'I\'ll treat you', desc: 'The bill\'s on me' },
+  { key: 'Split Equally', icon: 'git-branch-outline', label: 'We split equally', desc: 'Halves, no awkwardness' },
+  { key: 'They\'ll Pay', icon: 'wallet-outline', label: 'Whatever you prefer', desc: 'We\'ll sort it on the day' },
+  { key: 'Nothing To Pay', icon: 'leaf-outline', label: 'Nothing to pay', desc: 'A walk, a free exhibition…' },
 ];
 
 export default function CreateProposalScreen() {
@@ -132,7 +133,7 @@ export default function CreateProposalScreen() {
     if (!venue.trim()) e.venue = 'Tell her where you\'re taking her';
     if (!preferredDate.trim()) e.preferredDate = 'Date is required';
     if (!preferredTime.trim()) e.preferredTime = 'Time is required';
-    if (!paymentArrangement) e.paymentArrangement = 'Select a payment option';
+    // Payment is intentionally optional — plenty of good dates cost nothing.
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -191,10 +192,11 @@ export default function CreateProposalScreen() {
     };
   };
 
-  const paymentToEnum = (): 'he-pays' | 'split' | 'she-pays' => {
+  const paymentToEnum = (): 'he-pays' | 'split' | 'she-pays' | 'free' => {
     if (paymentArrangement === 'I\'ll Pay') return 'he-pays';
     if (paymentArrangement === 'They\'ll Pay') return 'she-pays';
-    return 'split';
+    if (paymentArrangement === 'Nothing To Pay') return 'free';
+    return 'split'; // also the sensible default when they skip the question
   };
 
   /**
@@ -479,8 +481,19 @@ export default function CreateProposalScreen() {
           </View>
           {errors.dateType && <Text style={styles.err}>{errors.dateType}</Text>}
 
-          <Input label="Venue / Restaurant" placeholder="e.g., Balthazar, SoHo" value={venue} onChangeText={setVenue} icon="restaurant-outline" />
-          <Input label="Alternative Plan (Optional)" placeholder="Backup idea if she has another preference..." value={alternativePlan} onChangeText={setAlternativePlan} icon="repeat-outline" />
+          <Input
+            label="Meeting point"
+            placeholder={dateType === 'Nature' ? 'e.g. Hampstead Heath, main gate' : 'e.g. Dishoom, Shoreditch'}
+            value={venue}
+            onChangeText={setVenue}
+            icon="location-outline"
+            error={errors.venue}
+          />
+          <Text style={styles.fieldHint}>
+            Where exactly you'll meet — a restaurant, a café, or a park entrance for a walk.
+          </Text>
+
+          <Input label="Alternative plan (optional)" placeholder="A backup idea in case that doesn't suit them" value={alternativePlan} onChangeText={setAlternativePlan} icon="repeat-outline" />
 
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
@@ -494,25 +507,33 @@ export default function CreateProposalScreen() {
 
         {/* Payment */}
         <View style={styles.card}>
-          <Text style={styles.sectionLbl}>Payment</Text>
-          <View style={styles.payList}>
-            {PAYMENT_OPTIONS.map((opt) => (
-              <TouchableOpacity
-                key={opt.key}
-                style={[styles.payRow, paymentArrangement === opt.key && styles.payRowOn]}
-                onPress={() => setPaymentArrangement(opt.key)}
-              >
-                <View style={[styles.payIcon, paymentArrangement === opt.key && styles.payIconOn]}>
-                  <Ionicons name={opt.icon as any} size={15} color={paymentArrangement === opt.key ? '#fff' : COLORS.PRIMARY} />
-                </View>
-                <Text style={[styles.payLbl, paymentArrangement === opt.key && styles.payLblOn]}>{opt.label}</Text>
-                {paymentArrangement === opt.key && (
-                  <Ionicons name="checkmark-circle" size={17} color={COLORS.PRIMARY} />
-                )}
-              </TouchableOpacity>
-            ))}
+          <Text style={styles.sectionLbl}>Who pays? (optional)</Text>
+          <Text style={styles.fieldHint}>
+            Setting expectations up front avoids the awkward moment at the end. Skip it if you'd
+            rather not say — or pick "Nothing to pay" for a walk or a free exhibition.
+          </Text>
+          <View style={[styles.payList, { marginTop: 12 }]}>
+            {PAYMENT_OPTIONS.map((opt) => {
+              const on = paymentArrangement === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.payRow, on && styles.payRowOn]}
+                  onPress={() => setPaymentArrangement(on ? '' : opt.key)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.payIcon, on && styles.payIconOn]}>
+                    <Ionicons name={opt.icon as any} size={15} color={on ? '#fff' : COLORS.PRIMARY} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.payLbl, on && styles.payLblOn]}>{opt.label}</Text>
+                    <Text style={styles.payDesc}>{opt.desc}</Text>
+                  </View>
+                  {on && <Ionicons name="checkmark-circle" size={17} color={COLORS.PRIMARY} />}
+                </TouchableOpacity>
+              );
+            })}
           </View>
-          {errors.paymentArrangement && <Text style={styles.err}>{errors.paymentArrangement}</Text>}
         </View>
 
         <Button title="Send Proposal" onPress={handleSend} loading={loading} size="lg" style={{ width: '100%', marginTop: 4 }} />
@@ -655,8 +676,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   payIconOn: { backgroundColor: COLORS.PRIMARY },
-  payLbl: { flex: 1, fontSize: 13, fontWeight: '600', color: COLORS.TEXT_SECONDARY },
+  payLbl: { fontSize: 13, fontWeight: '600', color: COLORS.TEXT_SECONDARY },
   payLblOn: { color: COLORS.PRIMARY, fontWeight: '700' },
+  payDesc: { fontSize: 11, color: COLORS.TEXT_MUTED, marginTop: 2 },
+  fieldHint: { fontSize: 11, color: COLORS.TEXT_MUTED, lineHeight: 16, marginTop: -6, marginBottom: 12 },
 
   /* Video introduction block */
   videoCard: {

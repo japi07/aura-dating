@@ -106,7 +106,10 @@ export default function EventsScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Events</Text>
-          <Text style={styles.sub}>Curated London experiences · meet other members in person</Text>
+          <Text style={styles.sub}>
+            Group nights out you can join — reserve a spot and meet other members.
+            Your one-to-one dates live in the Dates tab.
+          </Text>
         </View>
       </View>
 

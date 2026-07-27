@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
-import { useDatesStore, type ConfirmedDate } from '@/store/dates';
+import { useDatesStore, type ConfirmedDate, type DateInterest } from '@/store/dates';
 import { openInMaps } from '@/lib/maps';
 import { addDateToCalendar } from '@/lib/calendar';
 import { cancelReminders } from '@/lib/notifications';
@@ -16,7 +16,7 @@ const TABS = ['Upcoming', 'Past'] as const;
 type Tab = typeof TABS[number];
 
 export default function DatesScreen() {
-  const { dates, hydrate, upcoming, past, cancelDate, rateDate } = useDatesStore();
+  const { dates, hydrate, upcoming, past, cancelDate, rateDate, setDateInterest } = useDatesStore();
   const [tab, setTab] = useState<Tab>('Upcoming');
 
   useEffect(() => { hydrate(); }, []);
@@ -67,6 +67,20 @@ export default function DatesScreen() {
   const handleRate = (d: ConfirmedDate, rating: 1 | 2 | 3 | 4 | 5) => {
     rateDate(d.id, rating);
     Alert.alert('Thanks!', 'Your feedback helps us tailor better proposals.');
+  };
+
+  /** The follow-up window closes 24h after the date starts */
+  const followUpOpen = (d: ConfirmedDate) =>
+    Date.now() < new Date(d.startsAt).getTime() + 24 * 60 * 60 * 1000;
+
+  const handleInterest = (d: ConfirmedDate, interest: DateInterest) => {
+    setDateInterest(d.id, interest);
+    const copy: Record<DateInterest, string> = {
+      yes: `If ${d.with.name.split(' ')[0]} feels the same, we'll put you in touch.`,
+      no: 'Noted — thanks for being honest. It stays private.',
+      already: 'Lovely. Nothing more to do then ✨',
+    };
+    Alert.alert('Thanks!', copy[interest]);
   };
 
   return (
@@ -262,6 +276,55 @@ export default function DatesScreen() {
                     </Text>
                   </View>
                 ) : null}
+
+                {/* Post-date follow-up — open for 24h after the date */}
+                {d.status === 'completed' && !d.interest && followUpOpen(d) && (
+                  <View style={styles.followUp}>
+                    <Text style={styles.followUpTitle}>
+                      Would you like to swap numbers with {d.with.name.split(' ')[0]}?
+                    </Text>
+                    <Text style={styles.followUpSub}>
+                      Only shared if you both say yes. This closes 24 hours after the date.
+                    </Text>
+                    <View style={styles.followUpRow}>
+                      <TouchableOpacity
+                        style={[styles.followUpBtn, styles.followUpYes]}
+                        onPress={() => handleInterest(d, 'yes')}
+                        activeOpacity={0.85}
+                      >
+                        <Ionicons name="heart" size={15} color="#fff" />
+                        <Text style={styles.followUpYesText}>Yes</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.followUpBtn}
+                        onPress={() => handleInterest(d, 'no')}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.followUpBtnText}>No</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <TouchableOpacity onPress={() => handleInterest(d, 'already')} style={styles.followUpAlready}>
+                      <Text style={styles.followUpAlreadyText}>We already swapped on the date</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {d.interest && (
+                  <View style={styles.ratedBadge}>
+                    <Ionicons
+                      name={d.interest === 'yes' ? 'heart' : d.interest === 'already' ? 'checkmark-circle' : 'close-circle-outline'}
+                      size={14}
+                      color={d.interest === 'no' ? COLORS.TEXT_MUTED : COLORS.LIKE}
+                    />
+                    <Text style={styles.ratedBadgeText}>
+                      {d.interest === 'yes'
+                        ? 'You said yes to swapping numbers'
+                        : d.interest === 'already'
+                          ? 'You already swapped numbers'
+                          : 'You passed on swapping numbers'}
+                    </Text>
+                  </View>
+                )}
               </View>
             ))
           )
@@ -378,6 +441,25 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.BG, padding: 10, borderRadius: 12,
   },
   ratedBadgeText: { fontSize: 12, fontWeight: '600', color: COLORS.TEXT_SECONDARY, flex: 1 },
+
+  /* Post-date follow-up */
+  followUp: {
+    marginTop: 12, padding: 14, borderRadius: 16,
+    backgroundColor: COLORS.BRAND_MUTED, borderWidth: 1, borderColor: COLORS.BRAND + '30',
+  },
+  followUpTitle: { fontSize: 14, fontWeight: '800', color: COLORS.TEXT, marginBottom: 4 },
+  followUpSub: { fontSize: 11, color: COLORS.TEXT_MUTED, lineHeight: 15, marginBottom: 12 },
+  followUpRow: { flexDirection: 'row', gap: 8 },
+  followUpBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 12, borderRadius: 12,
+    backgroundColor: COLORS.SURFACE, borderWidth: 1.5, borderColor: COLORS.BORDER,
+  },
+  followUpBtnText: { fontSize: 13, fontWeight: '700', color: COLORS.TEXT_SECONDARY },
+  followUpYes: { backgroundColor: COLORS.LIKE, borderColor: COLORS.LIKE },
+  followUpYesText: { fontSize: 13, fontWeight: '800', color: '#fff' },
+  followUpAlready: { paddingTop: 12, alignItems: 'center' },
+  followUpAlreadyText: { fontSize: 12, fontWeight: '600', color: COLORS.TEXT_MUTED, textDecorationLine: 'underline' },
 
   empty: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 32 },
   emptyIcon: {
