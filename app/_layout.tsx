@@ -182,6 +182,7 @@ export default function RootLayout() {
         <Stack.Screen name="settings/emergency-contacts" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="sos" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="reset-password" options={{ animation: 'fade' }} />
+        <Stack.Screen name="thread/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="settings/subscription" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>
     </SafeAreaProvider>

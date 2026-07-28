@@ -4,6 +4,7 @@ import {
   StyleSheet, View, Text, ScrollView, TouchableOpacity,
   Image, Alert, StatusBar,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
 import { useDatesStore, type ConfirmedDate, type DateInterest } from '@/store/dates';
@@ -16,6 +17,7 @@ const TABS = ['Upcoming', 'Past'] as const;
 type Tab = typeof TABS[number];
 
 export default function DatesScreen() {
+  const router = useRouter();
   const { dates, hydrate, upcoming, past, cancelDate, rateDate, setDateInterest } = useDatesStore();
   const [tab, setTab] = useState<Tab>('Upcoming');
 
@@ -198,6 +200,24 @@ export default function DatesScreen() {
                         <Text style={styles.smallBtnGhostText}>Cancel</Text>
                       </TouchableOpacity>
                     </View>
+
+                    {/* Swap a few more videos / files before meeting */}
+                    {!!d.proposalId && !d.proposalId.startsWith('prop_') && (
+                      <TouchableOpacity
+                        style={styles.threadBtn}
+                        onPress={() => router.push({
+                          pathname: '/thread/[id]',
+                          params: { id: d.proposalId, name: d.with.name },
+                        })}
+                        activeOpacity={0.85}
+                      >
+                        <Ionicons name="videocam-outline" size={16} color={COLORS.BRAND} />
+                        <Text style={styles.threadBtnText}>
+                          Send {d.with.name.split(' ')[0]} a video or file
+                        </Text>
+                        <Ionicons name="chevron-forward" size={15} color={COLORS.BRAND} />
+                      </TouchableOpacity>
+                    )}
 
                     <View style={styles.safetyTip}>
                       <Ionicons name="shield-outline" size={14} color={COLORS.INFO} />
@@ -441,6 +461,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.BG, padding: 10, borderRadius: 12,
   },
   ratedBadgeText: { fontSize: 12, fontWeight: '600', color: COLORS.TEXT_SECONDARY, flex: 1 },
+
+  threadBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10,
+    paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14,
+    backgroundColor: COLORS.BRAND_MUTED, borderWidth: 1, borderColor: COLORS.BRAND + '30',
+  },
+  threadBtnText: { flex: 1, fontSize: 13, fontWeight: '700', color: COLORS.BRAND },
 
   /* Post-date follow-up */
   followUp: {

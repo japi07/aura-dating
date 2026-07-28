@@ -409,6 +409,24 @@ export default function TodayScreen() {
                   <DetailMini icon="pricetag-outline" text={`${proposal.venue.priceRange}  ·  ${formatCountdown(proposal.startsAt)}`} accent />
                 </View>
 
+                {/* Ask a question before deciding */}
+                {!proposal.id.startsWith('prop_') && (
+                  <TouchableOpacity
+                    style={styles.askBtn}
+                    onPress={() => router.push({
+                      pathname: '/thread/[id]',
+                      params: { id: proposal.id, name: proposal.from.name },
+                    })}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="videocam-outline" size={17} color={COLORS.BRAND} />
+                    <Text style={styles.askText}>
+                      Send {proposal.from.name.split(' ')[0]} a video back
+                    </Text>
+                    <Ionicons name="chevron-forward" size={15} color={COLORS.BRAND} />
+                  </TouchableOpacity>
+                )}
+
                 {/* Actions */}
                 <View style={styles.actions}>
                   <TouchableOpacity style={styles.passBtn} onPress={() => handleDecline(proposal)} activeOpacity={0.85}>
@@ -658,6 +676,13 @@ const styles = StyleSheet.create({
   },
   detailMiniAccent: { backgroundColor: COLORS.BRAND_MUTED, borderColor: COLORS.BRAND + '30' },
   detailMiniText: { fontSize: 13, color: COLORS.TEXT_SECONDARY, fontWeight: '500', flex: 1 },
+
+  askBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 13, paddingHorizontal: 14, borderRadius: 14, marginBottom: 14,
+    backgroundColor: COLORS.SURFACE, borderWidth: 1.5, borderColor: COLORS.BRAND_MUTED,
+  },
+  askText: { flex: 1, fontSize: 13, fontWeight: '700', color: COLORS.BRAND },
 
   /* Actions */
   actions: { flexDirection: 'row', gap: 12, alignItems: 'center' },
