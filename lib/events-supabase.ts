@@ -24,6 +24,10 @@ export interface AppEvent {
   featured?: boolean;
   lat: number;
   lng: number;
+  /** Ticket Tailor event id — enables live availability + in-app checkout */
+  ticketTailorEventId?: string;
+  /** Hosted checkout URL from Ticket Tailor for this event */
+  ticketCheckoutUrl?: string;
 }
 
 function rowToEvent(r: any): AppEvent {
@@ -47,6 +51,8 @@ function rowToEvent(r: any): AppEvent {
     featured: !!r.featured,
     lat: r.lat ?? 51.5074,
     lng: r.lng ?? -0.1278,
+    ticketTailorEventId: r.tickettailor_event_id ?? undefined,
+    ticketCheckoutUrl: r.ticket_checkout_url ?? undefined,
   };
 }
 

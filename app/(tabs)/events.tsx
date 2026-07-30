@@ -10,6 +10,11 @@ import { COLORS } from '@/constants/colors';
 import { openInMaps } from '@/lib/maps';
 import { addDateToCalendar } from '@/lib/calendar';
 import { fetchEvents, fetchMyEventRsvps, rsvpToEvent, type AppEvent } from '@/lib/events-supabase';
+import {
+  openTicketCheckout, fetchMyTicketedEventIds,
+  fetchTicketAvailability, formatTicketPrice, type TicketAvailability,
+} from '@/lib/tickets-supabase';
+import { useAuthStore } from '@/store/auth';
 
 type LondonEvent = AppEvent;
 
@@ -37,16 +42,69 @@ export default function EventsScreen() {
   const [category, setCategory] = useState<'All' | LondonEvent['type']>('All');
   const [events, setEvents] = useState<LondonEvent[]>([]);
   const [reserved, setReserved] = useState<string[]>([]);
+  const [ticketed, setTicketed] = useState<string[]>([]);
+  /** Live Ticket Tailor availability, keyed by our event id */
+  const [availability, setAvailability] = useState<Record<string, TicketAvailability>>({});
+  const { user } = useAuthStore();
 
   const load = useCallback(async () => {
     try {
-      const [list, mine] = await Promise.all([fetchEvents(), fetchMyEventRsvps()]);
+      const [list, mine, bought] = await Promise.all([
+        fetchEvents(), fetchMyEventRsvps(), fetchMyTicketedEventIds(),
+      ]);
       setEvents(list);
       setReserved(mine);
+      setTicketed(bought);
+
+      // Pull live prices / remaining tickets for events sold via Ticket Tailor
+      const ticketedEvents = list.filter((e) => e.ticketTailorEventId);
+      if (ticketedEvents.length) {
+        const results = await Promise.all(
+          ticketedEvents.map(async (e) => [
+            e.id,
+            await fetchTicketAvailability(e.ticketTailorEventId!),
+          ] as const),
+        );
+        setAvailability(Object.fromEntries(results.filter(([, a]) => a.available)));
+      }
     } catch {
       // offline / not configured — keep whatever we have, empty state shows
     }
   }, []);
+
+  /** Live price + remaining if Ticket Tailor is wired up, else our stored values */
+  const displayPrice = (e: LondonEvent) => {
+    const a = availability[e.id];
+    if (a?.fromPriceMinor != null) {
+      const cur = a.ticketTypes[0]?.currency ?? 'GBP';
+      return formatTicketPrice(a.fromPriceMinor, cur);
+    }
+    return e.price;
+  };
+  const displayRemaining = (e: LondonEvent) => {
+    const a = availability[e.id];
+    return a?.totalRemaining != null ? a.totalRemaining : e.spotsAvailable;
+  };
+
+  /** Ticketed events say "Get tickets"; free ones keep the RSVP wording */
+  const ctaDone = (e: LondonEvent) =>
+    e.ticketCheckoutUrl ? ticketed.includes(e.id) : reserved.includes(e.id);
+  const ctaLabel = (e: LondonEvent) => {
+    if (e.ticketCheckoutUrl) {
+      return ticketed.includes(e.id) ? '✓ Ticket booked' : `Get tickets · ${displayPrice(e)}`;
+    }
+    return reserved.includes(e.id) ? '✓ Reserved' : 'Reserve a spot';
+  };
+
+  const buyTickets = async (e: LondonEvent) => {
+    try {
+      await openTicketCheckout({ checkoutUrl: e.ticketCheckoutUrl!, email: user?.email });
+      // The webhook confirms the purchase; refresh so it shows once paid
+      await load();
+    } catch (err: any) {
+      Alert.alert('Could not open checkout', err?.message || 'Please try again.');
+    }
+  };
 
   useEffect(() => {
     (async () => { await load(); setLoading(false); })();
@@ -63,6 +121,8 @@ export default function EventsScreen() {
   const rest = filtered.filter((e) => !e.featured || category !== 'All');
 
   const reserve = (e: LondonEvent) => {
+    // Ticketed events go through Ticket Tailor's checkout instead of a free RSVP
+    if (e.ticketCheckoutUrl) { buyTickets(e); return; }
     if (reserved.includes(e.id)) return;
     Alert.alert(
       `Reserve a spot at ${e.title}?`,
@@ -181,7 +241,8 @@ export default function EventsScreen() {
                   <View style={[styles.spotsBarFill, { width: `${((featured.totalSpots - featured.spotsAvailable) / featured.totalSpots) * 100}%` }]} />
                 </View>
                 <Text style={styles.spotsText}>
-                  {featured.spotsAvailable <= 3 ? '🔥 ' : ''}{featured.spotsAvailable} spots · {featured.price}
+                  {displayRemaining(featured) <= 3 ? '🔥 ' : ''}
+                  {displayRemaining(featured)} spots · {displayPrice(featured)}
                 </Text>
               </View>
               <View style={styles.featuredActionsRow}>
@@ -190,13 +251,11 @@ export default function EventsScreen() {
                   <Text style={styles.featuredDirText}>Directions</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.featuredCtaBtn, reserved.includes(featured.id) && styles.featuredCtaBtnDone]}
+                  style={[styles.featuredCtaBtn, ctaDone(featured) && styles.featuredCtaBtnDone]}
                   onPress={() => reserve(featured)}
-                  disabled={reserved.includes(featured.id)}
+                  disabled={ctaDone(featured)}
                 >
-                  <Text style={styles.featuredCtaText}>
-                    {reserved.includes(featured.id) ? '✓ Reserved' : 'Reserve a spot'}
-                  </Text>
+                  <Text style={styles.featuredCtaText}>{ctaLabel(featured)}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -204,9 +263,11 @@ export default function EventsScreen() {
         }
         renderItem={({ item }) => {
           const tc = TYPE_CONFIG[item.type];
-          const fill = ((item.totalSpots - item.spotsAvailable) / item.totalSpots) * 100;
-          const almostFull = item.spotsAvailable <= 3;
-          const isReserved = reserved.includes(item.id);
+          const remaining = displayRemaining(item);
+          const fill = ((item.totalSpots - remaining) / item.totalSpots) * 100;
+          const almostFull = remaining <= 3;
+          const isReserved = ctaDone(item);
+          const ticketedEvent = !!item.ticketCheckoutUrl;
 
           return (
             <TouchableOpacity style={styles.card} onPress={() => reserve(item)} activeOpacity={0.85}>
@@ -226,7 +287,15 @@ export default function EventsScreen() {
                   )}
                   {isReserved && (
                     <View style={styles.reservedPill}>
-                      <Text style={styles.reservedText}>✓ Reserved</Text>
+                      <Text style={styles.reservedText}>
+                        {ticketedEvent ? '✓ Ticket booked' : '✓ Reserved'}
+                      </Text>
+                    </View>
+                  )}
+                  {ticketedEvent && !isReserved && (
+                    <View style={styles.ticketPill}>
+                      <Ionicons name="ticket-outline" size={10} color={COLORS.BRAND} />
+                      <Text style={styles.ticketPillText}>Ticketed</Text>
                     </View>
                   )}
                 </View>
@@ -242,7 +311,7 @@ export default function EventsScreen() {
                   <View style={styles.progressTrack}>
                     <View style={[styles.progressFill, { width: `${fill}%`, backgroundColor: almostFull ? COLORS.WARNING : COLORS.LIKE }]} />
                   </View>
-                  <Text style={styles.progressLabel}>{item.spotsAvailable}/{item.totalSpots} · {item.price}</Text>
+                  <Text style={styles.progressLabel}>{remaining}/{item.totalSpots} · {displayPrice(item)}</Text>
                 </View>
               </View>
               <Ionicons name="chevron-forward" size={16} color={COLORS.BORDER} style={{ alignSelf: 'center' }} />
@@ -315,6 +384,11 @@ const styles = StyleSheet.create({
   hotPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: COLORS.WARNING_LIGHT },
   hotText: { fontSize: 11, fontWeight: '700', color: COLORS.WARNING },
   reservedPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: COLORS.LIKE_BG },
+  ticketPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: COLORS.BRAND_MUTED,
+  },
+  ticketPillText: { fontSize: 11, fontWeight: '800', color: COLORS.BRAND },
   reservedText: { fontSize: 11, fontWeight: '800', color: COLORS.LIKE },
   cardTitle: { fontSize: 16, fontWeight: '700', color: COLORS.TEXT, marginBottom: 5 },
   cardMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },

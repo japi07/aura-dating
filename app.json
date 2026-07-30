@@ -101,7 +101,8 @@
           "faceIDPermission": "Aura uses Face ID to verify you're a real human."
         }
       ],
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "expo-web-browser"
     ],
     "extra": {
       "supabaseUrl": "https://krkibouizxurqboyahon.supabase.co",

@@ -16,6 +16,13 @@ verify_jwt = false
 [functions.moderate-image]
 verify_jwt = true
 
+[functions.ticket-availability]
+verify_jwt = true
+
+# Ticket Tailor calls this without a Supabase JWT — auth is the shared secret
+[functions.tickettailor-webhook]
+verify_jwt = false
+
 # Persona calls this without a Supabase JWT — auth is the shared secret
 [functions.persona-webhook]
 verify_jwt = false
