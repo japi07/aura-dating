@@ -43,12 +43,23 @@ export async function signUpWithEmail(input: SignUpInput): Promise<{ user: User;
   let photoUrl = input.photoUrl;
   if (isLocalUri(photoUrl)) {
     try {
+      const path = `${data.user.id}/avatar_${Date.now()}.jpg`;
       photoUrl = await uploadLocalFile({
         bucket: BUCKETS.PROFILE_PHOTOS,
-        path: `${data.user.id}/avatar_${Date.now()}.jpg`,
+        path,
         localUri: photoUrl!,
         contentType: 'image/jpeg',
       });
+      // Screen the sign-up photo the same way as later profile photos.
+      // If it's rejected we drop it rather than failing the whole sign-up —
+      // the account is already created at this point, and they'll get a clear
+      // explanation when they add a photo from Edit Profile.
+      const { moderateImageUrl } = await import('./profile-supabase');
+      const check = await moderateImageUrl(photoUrl);
+      if (!check.ok) {
+        try { await supabase.storage.from(BUCKETS.PROFILE_PHOTOS).remove([path]); } catch {}
+        photoUrl = undefined;
+      }
     } catch {
       // Upload failed (offline?) — better no photo than an unusable local path
       photoUrl = undefined;

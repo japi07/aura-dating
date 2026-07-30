@@ -32,8 +32,12 @@ Deno.serve(async (req: Request) => {
 
   try {
     const apiKey = Deno.env.get('OPENAI_API_KEY');
-    const { imageUrl } = await req.json();
-    if (!imageUrl) return json({ error: 'imageUrl required' }, 400);
+    // Accepts either a hosted URL, or base64 (used for video frames extracted
+    // on-device, so we never upload a frame just to check it).
+    const { imageUrl, imageBase64, mimeType } = await req.json();
+    const image = imageUrl
+      || (imageBase64 ? `data:${mimeType || 'image/jpeg'};base64,${imageBase64}` : null);
+    if (!image) return json({ error: 'imageUrl or imageBase64 required' }, 400);
 
     // Not configured yet — allow, so uploads keep working until moderation is on
     if (!apiKey) return json({ flagged: false, configured: false });
@@ -43,7 +47,7 @@ Deno.serve(async (req: Request) => {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: 'omni-moderation-latest',
-        input: [{ type: 'image_url', image_url: { url: imageUrl } }],
+        input: [{ type: 'image_url', image_url: { url: image } }],
       }),
     });
 

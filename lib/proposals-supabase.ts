@@ -7,6 +7,7 @@
  */
 import { getSupabase, supabaseEnabled, BUCKETS } from './supabase';
 import { uploadLocalFile, isLocalUri, remoteOnly } from './storage-upload';
+import { moderateVideo, VIDEO_REJECTED_MESSAGE } from './video-moderation';
 import type { Proposal } from '@/store/proposals';
 import type { ConfirmedDate } from '@/store/dates';
 import type { Venue } from '@/constants/london';
@@ -154,9 +155,13 @@ export async function createProposalOnServer(input: {
   if (!rec) throw new Error(`No Aura account found for ${email} yet — ask them to sign up first.`);
   if (rec.id === uid) throw new Error("You can't send a proposal to yourself.");
 
-  // The intro video is mandatory; push it to storage if it's still on-device
+  // The intro video is mandatory; push it to storage if it's still on-device.
+  // Screen it first by sampling frames — no point uploading something we're
+  // going to reject.
   let videoUrl = input.videoUrl;
   if (isLocalUri(videoUrl)) {
+    const check = await moderateVideo(videoUrl, input.videoDurationSec);
+    if (!check.ok) throw new Error(VIDEO_REJECTED_MESSAGE);
     videoUrl = await uploadLocalFile({
       bucket: BUCKETS.PROPOSAL_VIDEOS,
       path: `${uid}/${Date.now()}.mp4`,

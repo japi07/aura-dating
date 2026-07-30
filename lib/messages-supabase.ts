@@ -8,6 +8,8 @@
 import { getSupabase, supabaseEnabled, BUCKETS } from './supabase';
 import { uploadLocalFile, isLocalUri, remoteOnly } from './storage-upload';
 import { getSessionUserId } from './proposals-supabase';
+import { moderateVideo, VIDEO_REJECTED_MESSAGE } from './video-moderation';
+import { moderateImageUrl } from './profile-supabase';
 
 export interface ThreadMessage {
   id: string;
@@ -77,6 +79,11 @@ export async function sendThreadMessage(args: {
 
   let videoUrl: string | undefined;
   if (args.videoUri) {
+    // Screen sampled frames before spending an upload on it
+    if (isLocalUri(args.videoUri)) {
+      const check = await moderateVideo(args.videoUri, args.videoDurationSec);
+      if (!check.ok) throw new Error(VIDEO_REJECTED_MESSAGE);
+    }
     videoUrl = isLocalUri(args.videoUri)
       ? await uploadLocalFile({
           bucket: BUCKETS.PROPOSAL_VIDEOS,
@@ -98,6 +105,14 @@ export async function sendThreadMessage(args: {
           contentType: args.attachment.mimeType,
         })
       : args.attachment.uri;
+  }
+
+  // Image attachments get the same screening as profile photos
+  if (attachmentUrl && (args.attachment?.mimeType ?? '').startsWith('image/')) {
+    const check = await moderateImageUrl(attachmentUrl);
+    if (!check.ok) {
+      throw new Error('That image didn\'t pass our content guidelines. Please choose another.');
+    }
   }
 
   const { error } = await supabase.from('proposal_messages').insert({
