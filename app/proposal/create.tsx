@@ -18,7 +18,7 @@ import { pickAttachment, iconForMime, type PickedAttachment } from '@/lib/attach
 import { useAuthStore } from '@/store/auth';
 import { useProposalsStore } from '@/store/proposals';
 import { useUsersStore, type DirectoryUser } from '@/store/users';
-import { LONDON_VENUES } from '@/constants/london';
+import { LONDON_VENUES, type Venue } from '@/constants/london';
 
 const DATE_TYPES = [
   { key: 'Dinner', emoji: '🍽️', label: 'Dress-up Dinner' },
@@ -165,6 +165,22 @@ export default function CreateProposalScreen() {
     }
     return d.toISOString();
   };
+
+  /**
+   * Curated venues that fit the chosen date type. Tapping one fills the
+   * meeting point with an exact match, so the proposal carries the real
+   * address, postcode and tube stop rather than free text.
+   */
+  const suggestedVenues = React.useMemo(() => {
+    const byType: Record<string, Venue['category'][]> = {
+      Dinner: ['dinner', 'drinks'],
+      Coffee: ['coffee', 'drinks'],
+      Nature: ['walk'],
+      Activity: ['gallery', 'workshop', 'cooking'],
+    };
+    const cats = byType[dateType] ?? ['dinner', 'coffee', 'walk', 'drinks'];
+    return LONDON_VENUES.filter((v) => cats.includes(v.category));
+  }, [dateType]);
 
   /** Map UI date type to a venue category, then resolve a real London venue */
   const resolveVenue = () => {
@@ -493,6 +509,39 @@ export default function CreateProposalScreen() {
             Where exactly you'll meet — a restaurant, a café, or a park entrance for a walk.
           </Text>
 
+          {/* Curated suggestions for the chosen date type */}
+          {suggestedVenues.length > 0 && (
+            <>
+              <Text style={styles.suggestLabel}>
+                {dateType ? 'Suggestions' : 'Pick a date type to see suggestions'}
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestRail}>
+                {suggestedVenues.map((v) => {
+                  const on = venue.trim().toLowerCase() === v.name.toLowerCase();
+                  return (
+                    <TouchableOpacity
+                      key={v.id}
+                      style={[styles.suggestCard, on && styles.suggestCardOn]}
+                      onPress={() => setVenue(v.name)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.suggestEmoji}>{v.emoji}</Text>
+                      <Text style={[styles.suggestName, on && { color: COLORS.BRAND }]} numberOfLines={2}>
+                        {v.name}
+                      </Text>
+                      <Text style={styles.suggestMeta} numberOfLines={1}>
+                        {v.area} · {v.priceRange}
+                      </Text>
+                      {!!v.description && (
+                        <Text style={styles.suggestDesc} numberOfLines={2}>{v.description}</Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </>
+          )}
+
           <Input label="Alternative plan (optional)" placeholder="A backup idea in case that doesn't suit them" value={alternativePlan} onChangeText={setAlternativePlan} icon="repeat-outline" />
 
           <View style={styles.row}>
@@ -680,6 +729,22 @@ const styles = StyleSheet.create({
   payLblOn: { color: COLORS.PRIMARY, fontWeight: '700' },
   payDesc: { fontSize: 11, color: COLORS.TEXT_MUTED, marginTop: 2 },
   fieldHint: { fontSize: 11, color: COLORS.TEXT_MUTED, lineHeight: 16, marginTop: -6, marginBottom: 12 },
+
+  /* Venue suggestions */
+  suggestLabel: {
+    fontSize: 10, fontWeight: '800', color: COLORS.TEXT_MUTED,
+    letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8,
+  },
+  suggestRail: { gap: 10, paddingBottom: 4, paddingRight: 4 },
+  suggestCard: {
+    width: 156, padding: 12, borderRadius: 16, gap: 3,
+    backgroundColor: COLORS.BG, borderWidth: 1.5, borderColor: COLORS.BORDER_LIGHT,
+  },
+  suggestCardOn: { borderColor: COLORS.BRAND, backgroundColor: COLORS.BRAND_MUTED },
+  suggestEmoji: { fontSize: 20, marginBottom: 2 },
+  suggestName: { fontSize: 13, fontWeight: '800', color: COLORS.TEXT, lineHeight: 17 },
+  suggestMeta: { fontSize: 11, fontWeight: '700', color: COLORS.TEXT_MUTED },
+  suggestDesc: { fontSize: 10, color: COLORS.TEXT_MUTED, lineHeight: 14, marginTop: 2 },
 
   /* Video introduction block */
   videoCard: {
