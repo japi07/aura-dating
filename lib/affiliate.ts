@@ -9,8 +9,19 @@
  * Apple guideline 3.1.3(e): real-world experiences booked outside the app must
  * NOT use in-app purchase, so linking out is the correct (and required) route.
  */
-import * as WebBrowser from 'expo-web-browser';
+import { Linking } from 'react-native';
 import Constants from 'expo-constants';
+
+// expo-web-browser is a native module, so it only exists in a build made
+// after it was installed. Lazy-require it and fall back to the system
+// browser, otherwise older builds crash the moment this file is imported.
+let WebBrowser: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  WebBrowser = require('expo-web-browser');
+} catch {
+  WebBrowser = null;
+}
 
 const extra = (Constants.expoConfig?.extra ?? {}) as {
   viatorAffiliateId?: string;
@@ -71,11 +82,18 @@ export function isPartnerTracked(partner?: BookingPartner): boolean {
   }
 }
 
-/** Open a partner booking page in an in-app browser sheet. */
+/**
+ * Open a partner booking page. Uses the in-app browser sheet when available,
+ * otherwise the system browser — either way the affiliate tracking is intact.
+ */
 export async function openBooking(url: string, partner?: BookingPartner): Promise<void> {
   const tracked = buildAffiliateUrl(url, partner);
-  await WebBrowser.openBrowserAsync(tracked, {
-    presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-    dismissButtonStyle: 'done',
-  });
+  if (WebBrowser?.openBrowserAsync) {
+    await WebBrowser.openBrowserAsync(tracked, {
+      presentationStyle: WebBrowser.WebBrowserPresentationStyle?.PAGE_SHEET,
+      dismissButtonStyle: 'done',
+    });
+    return;
+  }
+  await Linking.openURL(tracked);
 }

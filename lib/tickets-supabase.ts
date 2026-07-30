@@ -7,9 +7,19 @@
  * checkout opened in an in-app browser (Apple guideline 3.1.3(e): real-world
  * event tickets must NOT use in-app purchase).
  */
-import * as WebBrowser from 'expo-web-browser';
+import { Linking } from 'react-native';
 import { getSupabase, supabaseEnabled } from './supabase';
 import { getSessionUserId } from './proposals-supabase';
+
+// Native module — only present in builds made after it was installed, so
+// lazy-require it and fall back to the system browser.
+let WebBrowser: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  WebBrowser = require('expo-web-browser');
+} catch {
+  WebBrowser = null;
+}
 
 export interface TicketType {
   id: string;
@@ -84,10 +94,14 @@ export async function openTicketCheckout(args: {
     url = `${url}${sep}email=${encodeURIComponent(args.email)}`;
   }
 
-  await WebBrowser.openBrowserAsync(url, {
-    presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-    dismissButtonStyle: 'done',
-  });
+  if (WebBrowser?.openBrowserAsync) {
+    await WebBrowser.openBrowserAsync(url, {
+      presentationStyle: WebBrowser.WebBrowserPresentationStyle?.PAGE_SHEET,
+      dismissButtonStyle: 'done',
+    });
+  } else {
+    await Linking.openURL(url);
+  }
   return true;
 }
 

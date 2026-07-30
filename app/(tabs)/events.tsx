@@ -280,7 +280,9 @@ export default function EventsScreen() {
           ) : null
         }
         renderItem={({ item }) => {
-          const tc = TYPE_CONFIG[item.type];
+          // Fall back if an event carries a type we don't have styling for,
+          // rather than crashing the whole list on an undefined lookup.
+          const tc = TYPE_CONFIG[item.type] ?? TYPE_CONFIG.Social;
           const remaining = displayRemaining(item);
           const fill = ((item.totalSpots - remaining) / item.totalSpots) * 100;
           const almostFull = remaining <= 3;
