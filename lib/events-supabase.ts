@@ -28,6 +28,10 @@ export interface AppEvent {
   ticketTailorEventId?: string;
   /** Hosted checkout URL from Ticket Tailor for this event */
   ticketCheckoutUrl?: string;
+  /** Third-party booking URL (Viator, DesignMyNight, Fever…) */
+  bookingUrl?: string;
+  /** Which partner the booking URL belongs to */
+  bookingPartner?: string;
 }
 
 function rowToEvent(r: any): AppEvent {
@@ -53,6 +57,8 @@ function rowToEvent(r: any): AppEvent {
     lng: r.lng ?? -0.1278,
     ticketTailorEventId: r.tickettailor_event_id ?? undefined,
     ticketCheckoutUrl: r.ticket_checkout_url ?? undefined,
+    bookingUrl: r.booking_url ?? undefined,
+    bookingPartner: r.booking_partner ?? undefined,
   };
 }
 

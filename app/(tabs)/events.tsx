@@ -15,6 +15,7 @@ import {
   fetchTicketAvailability, formatTicketPrice, type TicketAvailability,
 } from '@/lib/tickets-supabase';
 import { useAuthStore } from '@/store/auth';
+import { openBooking } from '@/lib/affiliate';
 
 type LondonEvent = AppEvent;
 
@@ -86,10 +87,21 @@ export default function EventsScreen() {
     return a?.totalRemaining != null ? a.totalRemaining : e.spotsAvailable;
   };
 
-  /** Ticketed events say "Get tickets"; free ones keep the RSVP wording */
-  const ctaDone = (e: LondonEvent) =>
-    e.ticketCheckoutUrl ? ticketed.includes(e.id) : reserved.includes(e.id);
+  /**
+   * Three kinds of event:
+   *  - partner experience (booking_url) -> book on the partner's site
+   *  - our own ticketed event           -> Ticket Tailor checkout
+   *  - free Aura event                  -> simple RSVP
+   */
+  const ctaDone = (e: LondonEvent) => {
+    if (e.bookingUrl) return false; // partner bookings are never "done" our side
+    return e.ticketCheckoutUrl ? ticketed.includes(e.id) : reserved.includes(e.id);
+  };
   const ctaLabel = (e: LondonEvent) => {
+    if (e.bookingUrl) {
+      const price = displayPrice(e);
+      return price && price !== 'Free' ? `Book · ${price}` : 'Book this experience';
+    }
     if (e.ticketCheckoutUrl) {
       return ticketed.includes(e.id) ? '✓ Ticket booked' : `Get tickets · ${displayPrice(e)}`;
     }
@@ -121,7 +133,13 @@ export default function EventsScreen() {
   const rest = filtered.filter((e) => !e.featured || category !== 'All');
 
   const reserve = (e: LondonEvent) => {
-    // Ticketed events go through Ticket Tailor's checkout instead of a free RSVP
+    // Partner experiences book on the partner's own site (affiliate-tracked)
+    if (e.bookingUrl) {
+      openBooking(e.bookingUrl, e.bookingPartner).catch((err: any) =>
+        Alert.alert('Could not open', err?.message || 'Please try again.'));
+      return;
+    }
+    // Our own ticketed events go through Ticket Tailor's checkout
     if (e.ticketCheckoutUrl) { buyTickets(e); return; }
     if (reserved.includes(e.id)) return;
     Alert.alert(
@@ -298,6 +316,14 @@ export default function EventsScreen() {
                       <Text style={styles.ticketPillText}>Ticketed</Text>
                     </View>
                   )}
+                  {!!item.bookingUrl && (
+                    <View style={styles.partnerPill}>
+                      <Ionicons name="sparkles" size={10} color={COLORS.GOLD_DEEP} />
+                      <Text style={styles.partnerPillText}>
+                        {item.bookingPartner ? `via ${item.bookingPartner}` : 'Bookable'}
+                      </Text>
+                    </View>
+                  )}
                 </View>
                 <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
                 <View style={styles.cardMetaRow}>
@@ -389,6 +415,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: COLORS.BRAND_MUTED,
   },
   ticketPillText: { fontSize: 11, fontWeight: '800', color: COLORS.BRAND },
+  partnerPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: COLORS.GOLD_MUTED,
+  },
+  partnerPillText: { fontSize: 11, fontWeight: '800', color: COLORS.GOLD_DEEP },
   reservedText: { fontSize: 11, fontWeight: '800', color: COLORS.LIKE },
   cardTitle: { fontSize: 16, fontWeight: '700', color: COLORS.TEXT, marginBottom: 5 },
   cardMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },

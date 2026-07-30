@@ -112,6 +112,9 @@
       "revenueCatEntitlement": "gold",
       "personaTemplateId": "",
       "personaEnvironmentId": "production",
+      "viatorAffiliateId": "",
+      "designMyNightAffiliateId": "",
+      "feverAffiliateId": "",
       "router": {},
       "eas": {
         "projectId": "c2c7b6ed-e8eb-4a9d-a510-813a466bd68f"
