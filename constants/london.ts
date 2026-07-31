@@ -59,46 +59,35 @@ export interface VenueTheme {
 }
 
 export const VENUE_THEMES: VenueTheme[] = [
-  // Dinner
+  // Dinner — kept deliberately broad so the list stays scannable
   { key: 'italian', label: 'Italian', emoji: '🍝', dateType: 'Dinner' },
-  { key: 'japanese', label: 'Japanese', emoji: '🍣', dateType: 'Dinner' },
+  { key: 'asian', label: 'Asian', emoji: '🍜', dateType: 'Dinner' },
   { key: 'indian', label: 'Indian', emoji: '🍛', dateType: 'Dinner' },
-  { key: 'spanish', label: 'Spanish / tapas', emoji: '🥘', dateType: 'Dinner' },
+  { key: 'tapas', label: 'Small plates', emoji: '🥘', dateType: 'Dinner' },
   { key: 'british', label: 'Modern British', emoji: '🍽️', dateType: 'Dinner' },
-  { key: 'middle-eastern', label: 'Middle Eastern', emoji: '🫓', dateType: 'Dinner' },
-  { key: 'asian', label: 'Thai / Vietnamese', emoji: '🍜', dateType: 'Dinner' },
-  { key: 'steak', label: 'Steak & grill', emoji: '🥩', dateType: 'Dinner' },
-  { key: 'seafood', label: 'Seafood', emoji: '🦞', dateType: 'Dinner' },
-  { key: 'veggie', label: 'Vegetarian / vegan', emoji: '🥗', dateType: 'Dinner' },
 
   // Coffee
-  { key: 'coffee-shop', label: 'Speciality coffee', emoji: '☕', dateType: 'Coffee' },
+  { key: 'coffee-shop', label: 'Coffee', emoji: '☕', dateType: 'Coffee' },
   { key: 'brunch', label: 'Brunch', emoji: '🥞', dateType: 'Coffee' },
-  { key: 'bakery', label: 'Bakery & pastries', emoji: '🥐', dateType: 'Coffee' },
   { key: 'tea', label: 'Afternoon tea', emoji: '🫖', dateType: 'Coffee' },
 
   // Drinks
   { key: 'cocktails', label: 'Cocktail bar', emoji: '🍸', dateType: 'Drinks' },
   { key: 'wine-bar', label: 'Wine bar', emoji: '🍷', dateType: 'Drinks' },
-  { key: 'pub', label: 'Proper pub', emoji: '🍺', dateType: 'Drinks' },
-  { key: 'rooftop', label: 'Rooftop bar', emoji: '🌆', dateType: 'Drinks' },
+  { key: 'pub', label: 'Pub', emoji: '🍺', dateType: 'Drinks' },
 
   // Nature
   { key: 'park', label: 'Park walk', emoji: '🌳', dateType: 'Nature' },
   { key: 'riverside', label: 'Riverside walk', emoji: '🌉', dateType: 'Nature' },
-  { key: 'canal', label: 'Canal walk', emoji: '🚤', dateType: 'Nature' },
   { key: 'garden', label: 'Botanical garden', emoji: '🌺', dateType: 'Nature' },
-  { key: 'heath', label: 'Heath & woodland', emoji: '🌲', dateType: 'Nature' },
   { key: 'market', label: 'Market wander', emoji: '💐', dateType: 'Nature' },
 
   // Activity
-  { key: 'gallery', label: 'Art gallery', emoji: '🖼️', dateType: 'Activity' },
+  { key: 'gallery', label: 'Gallery', emoji: '🖼️', dateType: 'Activity' },
   { key: 'museum', label: 'Museum', emoji: '🏛️', dateType: 'Activity' },
   { key: 'cooking', label: 'Cooking class', emoji: '👨‍🍳', dateType: 'Activity' },
-  { key: 'pottery', label: 'Pottery / crafts', emoji: '🏺', dateType: 'Activity' },
-  { key: 'comedy', label: 'Comedy night', emoji: '🎤', dateType: 'Activity' },
+  { key: 'comedy', label: 'Comedy', emoji: '🎤', dateType: 'Activity' },
   { key: 'live-music', label: 'Live music', emoji: '🎷', dateType: 'Activity' },
-  { key: 'cinema', label: 'Cinema', emoji: '🎬', dateType: 'Activity' },
 ];
 
 export const LONDON_VENUES: Venue[] = [
