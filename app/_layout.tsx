@@ -4,7 +4,7 @@ import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
-import { handleAuthCallbackUrl, ensureProfileForCurrentUser } from '@/lib/auth-supabase';
+import { handleAuthCallbackUrl, ensureProfileForCurrentUser, refreshMyProfile } from '@/lib/auth-supabase';
 import { useAuthStore } from '@/store/auth';
 import { useProposalsStore } from '@/store/proposals';
 import { useDatesStore } from '@/store/dates';
@@ -128,6 +128,13 @@ export default function RootLayout() {
       }
       await scheduleDailyProposalReminder();
       await hydrateSubscription();
+      // Re-read our own profile from the server. A stale local copy of
+      // gender / genderInterest silently filters the wrong people out of
+      // Discover, which is very hard to diagnose from the UI.
+      try {
+        const fresh = await refreshMyProfile();
+        if (fresh) setUser(fresh);
+      } catch { /* offline — keep the cached profile */ }
     })();
   }, [token, user]);
 

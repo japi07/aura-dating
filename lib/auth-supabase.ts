@@ -182,6 +182,22 @@ async function fetchProfile(userId: string): Promise<User> {
   };
 }
 
+/**
+ * Re-read the signed-in user's profile from the server. Returns null when
+ * signed out or offline, so callers can keep whatever they had cached.
+ */
+export async function refreshMyProfile(): Promise<User | null> {
+  if (!supabaseEnabled) return null;
+  try {
+    const { data } = await getSupabase().auth.getSession();
+    const uid = data.session?.user?.id;
+    if (!uid) return null;
+    return await fetchProfile(uid);
+  } catch {
+    return null;
+  }
+}
+
 /** Sign the user out of Supabase */
 export async function signOutSupabase(): Promise<void> {
   if (!supabaseEnabled) return;

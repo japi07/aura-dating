@@ -26,7 +26,12 @@ export default function DiscoverScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [previewing, setPreviewing] = useState<DirectoryUser | null>(null);
 
-  useEffect(() => { if (!isHydrated) hydrate(); }, []);
+  // Always pull the latest members when the tab opens — someone who signed up
+  // after this session started otherwise stays invisible until a manual refresh.
+  useEffect(() => {
+    if (!isHydrated) hydrate();
+    else refreshFromServer();
+  }, []);
 
   const people: DirectoryUser[] = user?.email
     ? candidatesFor(user.email, { genderInterest: user.genderInterest, myGender: user.gender })

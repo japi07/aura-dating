@@ -42,11 +42,18 @@ export default function CreateProposalScreen() {
   const params = useLocalSearchParams<{ recipientEmail?: string }>();
   const { user } = useAuthStore();
   const { sendProposal } = useProposalsStore();
-  const { candidatesFor, hydrate: hydrateUsers, isHydrated: usersHydrated } = useUsersStore();
+  const {
+    candidatesFor, hydrate: hydrateUsers, isHydrated: usersHydrated,
+    refreshFromServer: refreshUsersFromServer,
+  } = useUsersStore();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => { if (!usersHydrated) hydrateUsers(); }, []);
+  // Refresh on open so newly-joined members are immediately proposable
+  useEffect(() => {
+    if (!usersHydrated) hydrateUsers();
+    else refreshUsersFromServer();
+  }, []);
 
   const recipients: DirectoryUser[] = user?.email
     ? candidatesFor(user.email, { genderInterest: user.genderInterest, myGender: user.gender })
