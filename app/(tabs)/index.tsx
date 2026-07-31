@@ -18,6 +18,7 @@ import { scheduleDateReminders } from '@/lib/notifications';
 import { addDateToCalendar } from '@/lib/calendar';
 import { blockUserOnServer, reportUserOnServer } from '@/lib/profile-supabase';
 import { iconForMime } from '@/lib/attachment-picker';
+import { canSendProposals } from '@/lib/roles';
 import {
   formatDate, formatTime, formatCountdown,
   greeting, todayLong, paymentLabel,
@@ -74,8 +75,7 @@ export default function TodayScreen() {
   const myEmail = (user?.email || '').toLowerCase().trim();
   const hasReceivedAny = allProposals.some(p => p?.recipientEmail?.toLowerCase?.() === myEmail);
   const hasSentAny = allProposals.some(p => p?.from?.email?.toLowerCase?.() === myEmail);
-  const isSender =
-    (user?.gender || '').toLowerCase() === 'male' || (!hasReceivedAny && hasSentAny);
+  const isSender = canSendProposals(user);
   // Never promise a countdown to someone who has never received a proposal.
   const showCountdown = !isSender && reviewedToday && hasReceivedAny;
 
@@ -531,21 +531,23 @@ export default function TodayScreen() {
                 </View>
               </View>
 
-              {/* Send a proposal CTA — entry point to the composer */}
-              <TouchableOpacity
-                style={styles.sendCta}
-                onPress={() => router.push('/proposal/create')}
-                activeOpacity={0.85}
-              >
-                <View style={styles.sendCtaIcon}>
-                  <Ionicons name="videocam" size={20} color="#fff" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.sendCtaTitle}>Send a date proposal</Text>
-                  <Text style={styles.sendCtaSub}>Record your video, pick the venue, send it to her email</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={COLORS.BRAND} />
-              </TouchableOpacity>
+              {/* Composer entry point — senders only */}
+              {isSender && (
+                <TouchableOpacity
+                  style={styles.sendCta}
+                  onPress={() => router.push('/proposal/create')}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.sendCtaIcon}>
+                    <Ionicons name="videocam" size={20} color="#fff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.sendCtaTitle}>Send a date proposal</Text>
+                    <Text style={styles.sendCtaSub}>Record your video, pick the vibe, offer a few times</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={COLORS.BRAND} />
+                </TouchableOpacity>
+              )}
             </Animated.View>
           )}
 

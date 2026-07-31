@@ -11,6 +11,7 @@ import { useAuthStore } from '@/store/auth';
 import { useUsersStore, type DirectoryUser } from '@/store/users';
 import { MemberCard } from '@/components/MemberCard';
 import { MemberDetailSheet } from '@/components/MemberDetailSheet';
+import { canSendProposals } from '@/lib/roles';
 
 const CARD_W = Dimensions.get('window').width - 32;
 
@@ -25,6 +26,8 @@ export default function DiscoverScreen() {
   const { candidatesFor, hydrate, isHydrated, refreshFromServer } = useUsersStore();
   const [refreshing, setRefreshing] = useState(false);
   const [previewing, setPreviewing] = useState<DirectoryUser | null>(null);
+  // Only proposers get the compose actions — everyone else browses
+  const isSender = canSendProposals(user);
 
   // Always pull the latest members when the tab opens — someone who signed up
   // after this session started otherwise stays invisible until a manual refresh.
@@ -61,9 +64,11 @@ export default function DiscoverScreen() {
               : 'Members you could invite on a date'}
           </Text>
         </View>
-        <TouchableOpacity style={styles.composeBtn} onPress={() => router.push('/proposal/create')}>
-          <Ionicons name="videocam" size={20} color="#fff" />
-        </TouchableOpacity>
+        {isSender && (
+          <TouchableOpacity style={styles.composeBtn} onPress={() => router.push('/proposal/create')}>
+            <Ionicons name="videocam" size={20} color="#fff" />
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView
@@ -100,10 +105,12 @@ export default function DiscoverScreen() {
                     <Ionicons name="expand-outline" size={15} color={COLORS.TEXT_SECONDARY} />
                     <Text style={styles.viewText}>View full profile</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.proposeBtn} onPress={() => propose(p)} activeOpacity={0.88}>
-                    <Ionicons name="heart" size={17} color="#fff" />
-                    <Text style={styles.proposeText}>Propose a date</Text>
-                  </TouchableOpacity>
+                  {isSender && (
+                    <TouchableOpacity style={styles.proposeBtn} onPress={() => propose(p)} activeOpacity={0.88}>
+                      <Ionicons name="heart" size={17} color="#fff" />
+                      <Text style={styles.proposeText}>Propose a date</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               }
             />
@@ -116,7 +123,7 @@ export default function DiscoverScreen() {
         visible={!!previewing}
         onClose={() => setPreviewing(null)}
         ctaLabel={previewing ? `Propose to ${previewing.name.split(' ')[0]}` : undefined}
-        onCta={() => previewing && propose(previewing)}
+        onCta={isSender ? () => previewing && propose(previewing) : undefined}
       />
     </SafeAreaView>
   );

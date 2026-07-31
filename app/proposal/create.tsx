@@ -15,6 +15,7 @@ import { TimeField } from '@/components/TimeField';
 import { MemberCard } from '@/components/MemberCard';
 import { MemberDetailSheet } from '@/components/MemberDetailSheet';
 import { pickAttachment, iconForMime, type PickedAttachment } from '@/lib/attachment-picker';
+import { canSendProposals } from '@/lib/roles';
 import { useAuthStore } from '@/store/auth';
 import { useProposalsStore } from '@/store/proposals';
 import { useUsersStore, type DirectoryUser } from '@/store/users';
@@ -48,6 +49,29 @@ export default function CreateProposalScreen() {
   } = useUsersStore();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Safety net: the entry points are already hidden for non-proposers, but
+  // guard the screen itself so it can't be reached by a stale deep link.
+  if (user && !canSendProposals(user)) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
+        <Ionicons name="mail-open-outline" size={44} color={COLORS.BRAND} />
+        <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.TEXT, marginTop: 16, textAlign: 'center' }}>
+          Proposals come to you
+        </Text>
+        <Text style={{ fontSize: 14, color: COLORS.TEXT_MUTED, marginTop: 8, textAlign: 'center', lineHeight: 20 }}>
+          On Aura you receive curated date proposals rather than sending them.
+          They'll appear on your Today tab.
+        </Text>
+        <TouchableOpacity
+          style={{ marginTop: 22, paddingHorizontal: 22, paddingVertical: 13, borderRadius: 14, backgroundColor: COLORS.BRAND }}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+        >
+          <Text style={{ color: '#fff', fontWeight: '800' }}>Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   // Refresh on open so newly-joined members are immediately proposable
   useEffect(() => {

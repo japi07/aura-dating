@@ -16,6 +16,7 @@ import { DateField } from '@/components/DateField';
 import { CityField } from '@/components/CityField';
 import { COLORS } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
+import { derivedGenderInterest } from '@/lib/roles';
 
 const INTERESTS = [
   'Travel', 'Music', 'Art', 'Cooking', 'Sports', 'Reading',
@@ -41,7 +42,6 @@ const DEALBREAKERS = [
 ];
 
 const GENDERS = ['Male', 'Female', 'Non-binary'];
-const GENDER_INTERESTS = ['Male', 'Female', 'Everyone'];
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -52,7 +52,8 @@ export default function OnboardingScreen() {
 
   const [birthday, setBirthday] = useState('');
   const [gender, setGender] = useState('');
-  const [genderInterest, setGenderInterest] = useState('');
+  // Derived from gender for now — see lib/roles
+  const genderInterest = derivedGenderInterest(gender);
   const [city, setCity] = useState('London');
   const [bio, setBio] = useState('');
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
@@ -78,7 +79,6 @@ export default function OnboardingScreen() {
     if (step === 1) {
       if (!birthday.trim()) e.birthday = 'Birthday is required';
       if (!gender) e.gender = 'Select your gender';
-      if (!genderInterest) e.genderInterest = 'Select your preference';
       if (!city.trim()) e.city = 'City is required';
     } else if (step === 2) {
       if (!bio.trim()) e.bio = 'Tell us about yourself';
@@ -193,15 +193,6 @@ export default function OnboardingScreen() {
           </View>
           {errors.gender && <Text style={styles.err}>{errors.gender}</Text>}
 
-          <Text style={styles.fieldLbl}>Interested in</Text>
-          <View style={styles.chips}>
-            {GENDER_INTERESTS.map((gi) => (
-              <TouchableOpacity key={gi} style={[styles.chip, genderInterest === gi && styles.chipOn]} onPress={() => setGenderInterest(gi)}>
-                <Text style={[styles.chipText, genderInterest === gi && styles.chipTextOn]}>{gi}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          {errors.genderInterest && <Text style={styles.err}>{errors.genderInterest}</Text>}
 
           <CityField label="City" />
         </View>
