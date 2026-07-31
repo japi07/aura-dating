@@ -69,6 +69,9 @@ function rowToProposal(row: any): Proposal {
     matchReason: row.match_reason ?? '',
     venue,
     startsAt: row.starts_at,
+    dateOptions: Array.isArray(row.date_options) && row.date_options.length
+      ? row.date_options
+      : [row.starts_at],
     payment: row.payment ?? 'split',
     message: row.message,
     videoUrl: row.video_url,
@@ -130,6 +133,8 @@ export async function createProposalOnServer(input: {
   recipientEmail: string;
   venue: Venue;
   startsAt: string;
+  /** Additional slots offered alongside startsAt */
+  dateOptions?: string[];
   payment: 'he-pays' | 'split' | 'she-pays' | 'free';
   message: string;
   videoUrl: string;
@@ -197,6 +202,7 @@ export async function createProposalOnServer(input: {
       venue_emoji: input.venue.emoji,
       date_type: input.venue.category,
       starts_at: input.startsAt,
+      date_options: input.dateOptions?.length ? input.dateOptions : [input.startsAt],
       payment: input.payment,
       message: input.message,
       video_url: videoUrl,
@@ -224,11 +230,18 @@ export async function createProposalOnServer(input: {
 export async function decideProposalOnServer(
   proposalId: string,
   decision: 'accepted' | 'declined',
+  /** Which offered slot the recipient picked, when accepting */
+  chosenStartsAt?: string,
 ): Promise<void> {
   const supabase = getSupabase();
+  // Setting starts_at in the same statement means the accept trigger copies
+  // the chosen slot straight onto the confirmed date row.
+  const patch: Record<string, any> = { status: decision };
+  if (decision === 'accepted' && chosenStartsAt) patch.starts_at = chosenStartsAt;
+
   const { error } = await supabase
     .from('proposals')
-    .update({ status: decision })
+    .update(patch)
     .eq('id', proposalId);
   if (error) throw error;
   // Tell the sender their proposal was accepted (non-blocking)

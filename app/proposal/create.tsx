@@ -18,7 +18,7 @@ import { pickAttachment, iconForMime, type PickedAttachment } from '@/lib/attach
 import { useAuthStore } from '@/store/auth';
 import { useProposalsStore } from '@/store/proposals';
 import { useUsersStore, type DirectoryUser } from '@/store/users';
-import { LONDON_VENUES, type Venue } from '@/constants/london';
+import { LONDON_VENUES, VENUE_THEMES, type Venue } from '@/constants/london';
 
 const DATE_TYPES = [
   { key: 'Dinner', emoji: '🍽️', label: 'Dress-up Dinner' },
@@ -70,9 +70,14 @@ export default function CreateProposalScreen() {
   const [message, setMessage] = useState('');
   const [dateType, setDateType] = useState('');
   const [venue, setVenue] = useState('');
+  const [area, setArea] = useState('');
   const [alternativePlan, setAlternativePlan] = useState('');
-  const [preferredDate, setPreferredDate] = useState('');
-  const [preferredTime, setPreferredTime] = useState('');
+  // Up to three slots so she can pick whichever suits her
+  const [slots, setSlots] = useState<{ date: string; time: string }[]>([
+    { date: '', time: '' }, { date: '', time: '' }, { date: '', time: '' },
+  ]);
+  const setSlot = (i: number, patch: Partial<{ date: string; time: string }>) =>
+    setSlots((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
   const [paymentArrangement, setPaymentArrangement] = useState('');
 
   // Mandatory video introduction
@@ -138,15 +143,22 @@ export default function CreateProposalScreen() {
     else if (message.length < 10) e.message = 'At least 10 characters';
     if (!dateType) e.dateType = 'Select a date type';
     if (!venue.trim()) e.venue = 'Tell her where you\'re taking her';
-    if (!preferredDate.trim()) e.preferredDate = 'Date is required';
-    if (!preferredTime.trim()) e.preferredTime = 'Time is required';
+    if (!slots[0].date.trim() || !slots[0].time.trim()) {
+      e.slot0 = 'Offer at least one date and time';
+    }
     // Payment is intentionally optional — plenty of good dates cost nothing.
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  /** Try to parse the typed date+time into a real ISO datetime */
-  const parseStartsAt = (): string => {
+  /** Every filled-in slot, as ISO datetimes, in the order offered */
+  const parseSlots = (): string[] =>
+    slots
+      .filter((s) => s.date.trim() && s.time.trim())
+      .map((s) => parseOne(s.date, s.time));
+
+  /** Try to parse a date+time pair into a real ISO datetime */
+  const parseOne = (preferredDate: string, preferredTime: string): string => {
     const dStr = preferredDate.trim();
     // dd/mm/yyyy or yyyy-mm-dd
     const ddmmyyyy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(dStr);
@@ -178,15 +190,11 @@ export default function CreateProposalScreen() {
    * meeting point with an exact match, so the proposal carries the real
    * address, postcode and tube stop rather than free text.
    */
-  const suggestedVenues = React.useMemo(() => {
-    const byType: Record<string, Venue['category'][]> = {
-      Dinner: ['dinner', 'drinks'],
-      Coffee: ['coffee', 'drinks'],
-      Nature: ['walk'],
-      Activity: ['gallery', 'workshop', 'cooking'],
-    };
-    const cats = byType[dateType] ?? ['dinner', 'coffee', 'walk', 'drinks'];
-    return LONDON_VENUES.filter((v) => cats.includes(v.category));
+  const themesForType = React.useMemo(() => {
+    if (!dateType) return VENUE_THEMES;
+    // Dinner also offers drinks themes — a bar is a perfectly good dinner date
+    const types = dateType === 'Dinner' ? ['Dinner', 'Drinks'] : [dateType];
+    return VENUE_THEMES.filter((t) => types.includes(t.dateType));
   }, [dateType]);
 
   /** Map UI date type to a venue category, then resolve a real London venue */
@@ -195,18 +203,17 @@ export default function CreateProposalScreen() {
       : dateType === 'Coffee' ? 'coffee'
       : dateType === 'Nature' ? 'walk'
       : 'gallery';
-    // If user typed an exact venue name we have, use it; otherwise pick first in category
-    const lcVenue = venue.trim().toLowerCase();
-    const exact = LONDON_VENUES.find(v => v.name.toLowerCase() === lcVenue);
-    if (exact) return exact;
-    // Otherwise return a "free-form" venue using the user's typed value
+    // The proposal now carries a *type* of place rather than a booked venue —
+    // the exact spot is agreed between the two of them afterwards.
+    const theme = VENUE_THEMES.find((t) => t.label === venue);
     return {
-      id: `custom_${Date.now()}`,
+      id: `theme_${theme?.key ?? 'custom'}_${Date.now()}`,
       name: venue.trim(),
       category: cat,
-      emoji: dateType === 'Dinner' ? '🍽️' : dateType === 'Coffee' ? '☕' : dateType === 'Nature' ? '🌿' : '🎨',
-      area: 'London',
-      address: venue.trim(),
+      emoji: theme?.emoji
+        ?? (dateType === 'Dinner' ? '🍽️' : dateType === 'Coffee' ? '☕' : dateType === 'Nature' ? '🌿' : '🎨'),
+      area: area.trim() || 'London',
+      address: area.trim() || 'To be arranged together',
       postcode: '',
       tube: '',
       priceRange: '££' as const,
@@ -263,6 +270,7 @@ export default function CreateProposalScreen() {
       const resolvedVenue = resolveVenue();
       const r = selectedRecipient!;
       const match = computeMatch(r);
+      const offered = parseSlots();
 
       await sendProposal({
         from: {
@@ -281,7 +289,8 @@ export default function CreateProposalScreen() {
         matchScore: match.score,
         matchReason: match.reason,
         venue: resolvedVenue as any,
-        startsAt: parseStartsAt(),
+        startsAt: offered[0],
+        dateOptions: offered,
         payment: paymentToEnum(),
         message: message.trim(),
         videoUrl: videoUri!,
@@ -504,61 +513,73 @@ export default function CreateProposalScreen() {
           </View>
           {errors.dateType && <Text style={styles.err}>{errors.dateType}</Text>}
 
-          <Input
-            label="Meeting point"
-            placeholder={dateType === 'Nature' ? 'e.g. Hampstead Heath, main gate' : 'e.g. Dishoom, Shoreditch'}
-            value={venue}
-            onChangeText={setVenue}
-            icon="location-outline"
-            error={errors.venue}
-          />
+          {/* What kind of place — the exact venue is arranged later */}
+          <Text style={styles.sectionLbl}>What kind of place</Text>
           <Text style={styles.fieldHint}>
-            Where exactly you'll meet — a restaurant, a café, or a park entrance for a walk.
+            Pick the vibe rather than a specific venue — you'll sort the exact
+            spot together once she's said yes.
           </Text>
+          <View style={styles.themeWrap}>
+            {themesForType.map((t) => {
+              const on = venue === t.label;
+              return (
+                <TouchableOpacity
+                  key={t.key}
+                  style={[styles.themeChip, on && styles.themeChipOn]}
+                  onPress={() => setVenue(on ? '' : t.label)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.themeEmoji}>{t.emoji}</Text>
+                  <Text style={[styles.themeLabel, on && styles.themeLabelOn]}>{t.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {errors.venue && <Text style={styles.err}>{errors.venue}</Text>}
 
-          {/* Curated suggestions for the chosen date type */}
-          {suggestedVenues.length > 0 && (
-            <>
-              <Text style={styles.suggestLabel}>
-                {dateType ? 'Suggestions' : 'Pick a date type to see suggestions'}
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestRail}>
-                {suggestedVenues.map((v) => {
-                  const on = venue.trim().toLowerCase() === v.name.toLowerCase();
-                  return (
-                    <TouchableOpacity
-                      key={v.id}
-                      style={[styles.suggestCard, on && styles.suggestCardOn]}
-                      onPress={() => setVenue(v.name)}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.suggestEmoji}>{v.emoji}</Text>
-                      <Text style={[styles.suggestName, on && { color: COLORS.BRAND }]} numberOfLines={2}>
-                        {v.name}
-                      </Text>
-                      <Text style={styles.suggestMeta} numberOfLines={1}>
-                        {v.area} · {v.priceRange}
-                      </Text>
-                      {!!v.description && (
-                        <Text style={styles.suggestDesc} numberOfLines={2}>{v.description}</Text>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </>
-          )}
+          <Input
+            label="Area (optional)"
+            placeholder="e.g. Shoreditch, Soho, South Bank"
+            value={area}
+            onChangeText={setArea}
+            icon="location-outline"
+          />
+
 
           <Input label="Alternative plan (optional)" placeholder="A backup idea in case that doesn't suit them" value={alternativePlan} onChangeText={setAlternativePlan} icon="repeat-outline" />
 
-          <View style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <DateField label="Date" value={preferredDate} onChange={setPreferredDate} mode="future" placeholder="Pick a date" error={errors.preferredDate} />
+          {/* Up to three slots so she can pick what suits her */}
+          <Text style={styles.sectionLbl}>When works for you?</Text>
+          <Text style={styles.fieldHint}>
+            Offer up to three options and she'll pick whichever fits her week.
+            Only the first is required.
+          </Text>
+
+          {slots.map((s, i) => (
+            <View key={i} style={styles.slotBlock}>
+              <Text style={styles.slotLabel}>
+                {i === 0 ? 'Option 1' : `Option ${i + 1} (optional)`}
+              </Text>
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <DateField
+                    value={s.date}
+                    onChange={(v) => setSlot(i, { date: v })}
+                    mode="future"
+                    placeholder="Pick a date"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <TimeField
+                    value={s.time}
+                    onChange={(v) => setSlot(i, { time: v })}
+                    placeholder="Pick a time"
+                  />
+                </View>
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <TimeField label="Time" value={preferredTime} onChange={setPreferredTime} placeholder="Pick a time" error={errors.preferredTime} />
-            </View>
-          </View>
+          ))}
+          {errors.slot0 && <Text style={styles.err}>{errors.slot0}</Text>}
         </View>
 
         {/* Payment */}
@@ -737,21 +758,24 @@ const styles = StyleSheet.create({
   payDesc: { fontSize: 11, color: COLORS.TEXT_MUTED, marginTop: 2 },
   fieldHint: { fontSize: 11, color: COLORS.TEXT_MUTED, lineHeight: 16, marginTop: -6, marginBottom: 12 },
 
-  /* Venue suggestions */
-  suggestLabel: {
-    fontSize: 10, fontWeight: '800', color: COLORS.TEXT_MUTED,
-    letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8,
-  },
-  suggestRail: { gap: 10, paddingBottom: 4, paddingRight: 4 },
-  suggestCard: {
-    width: 156, padding: 12, borderRadius: 16, gap: 3,
+  /* Venue themes */
+  themeWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  themeChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 9, borderRadius: 14,
     backgroundColor: COLORS.BG, borderWidth: 1.5, borderColor: COLORS.BORDER_LIGHT,
   },
-  suggestCardOn: { borderColor: COLORS.BRAND, backgroundColor: COLORS.BRAND_MUTED },
-  suggestEmoji: { fontSize: 20, marginBottom: 2 },
-  suggestName: { fontSize: 13, fontWeight: '800', color: COLORS.TEXT, lineHeight: 17 },
-  suggestMeta: { fontSize: 11, fontWeight: '700', color: COLORS.TEXT_MUTED },
-  suggestDesc: { fontSize: 10, color: COLORS.TEXT_MUTED, lineHeight: 14, marginTop: 2 },
+  themeChipOn: { backgroundColor: COLORS.BRAND_MUTED, borderColor: COLORS.BRAND },
+  themeEmoji: { fontSize: 15 },
+  themeLabel: { fontSize: 13, fontWeight: '700', color: COLORS.TEXT_SECONDARY },
+  themeLabelOn: { color: COLORS.BRAND },
+
+  /* Date/time slots */
+  slotBlock: { marginBottom: 4 },
+  slotLabel: {
+    fontSize: 11, fontWeight: '800', color: COLORS.TEXT_MUTED,
+    letterSpacing: 0.5, marginBottom: 6,
+  },
 
   /* Video introduction block */
   videoCard: {

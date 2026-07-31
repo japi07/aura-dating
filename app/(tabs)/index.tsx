@@ -86,33 +86,57 @@ export default function TodayScreen() {
   };
 
   const handleAccept = (p: Proposal) => {
+    const options = (p.dateOptions?.length ? p.dateOptions : [p.startsAt])
+      .filter(Boolean)
+      .slice(0, 3);
+
+    // More than one slot offered? Let her choose before confirming.
+    if (options.length > 1) {
+      Alert.alert(
+        'Which suits you?',
+        `${p.from.name.split(' ')[0]} offered ${options.length} times for ${p.venue.name}.`,
+        [
+          ...options.map((iso) => ({
+            text: `${formatDate(iso)} · ${formatTime(iso)}`,
+            onPress: () => confirmAccept(p, iso),
+          })),
+          { text: 'Not yet', style: 'cancel' as const },
+        ],
+      );
+      return;
+    }
+    confirmAccept(p, options[0]);
+  };
+
+  const confirmAccept = (p: Proposal, chosenStartsAt: string) => {
     Alert.alert(
       `Accept ${p.from.name}'s proposal?`,
-      `${p.venue.name}\n${formatDate(p.startsAt)} · ${formatTime(p.startsAt)}\n\nWe'll add it to your calendar and remind you 2h + 30 min before.`,
+      `${p.venue.name}\n${formatDate(chosenStartsAt)} · ${formatTime(chosenStartsAt)}\n\nWe'll add it to your calendar and remind you 2h + 30 min before.`,
       [
         { text: 'Not yet', style: 'cancel' },
         {
           text: 'Accept',
           onPress: async () => {
-            const accepted = await acceptProposal(p.id);
+            const accepted = await acceptProposal(p.id, chosenStartsAt);
             if (!accepted) return;
+            // Use the slot she actually picked for reminders and the calendar
             const reminderIds = await scheduleDateReminders({
               dateId: p.id,
               with: p.from.name,
               venue: p.venue.name,
-              startsAt: new Date(p.startsAt),
+              startsAt: new Date(chosenStartsAt),
             });
-            await addDate(p, reminderIds);
+            await addDate(accepted, reminderIds);
             addDateToCalendar({
               title: `Date with ${p.from.name} — ${p.venue.name}`,
               notes: `${p.venue.category} · ${paymentLabel(p.payment)}\n\n"${p.message}"`,
               location: `${p.venue.name}, ${p.venue.address}, ${p.venue.postcode}, London`,
-              startsAt: new Date(p.startsAt),
+              startsAt: new Date(chosenStartsAt),
               durationMinutes: 90,
             });
             Alert.alert(
               '🎉 Date confirmed!',
-              `${p.venue.name} on ${formatDate(p.startsAt)} at ${formatTime(p.startsAt)}.\n\nFind details in the Dates tab.`
+              `${p.venue.name} on ${formatDate(chosenStartsAt)} at ${formatTime(chosenStartsAt)}.\n\nFind details in the Dates tab.`
             );
           },
         },
@@ -337,11 +361,32 @@ export default function TodayScreen() {
                 <Text style={styles.venueName}>{proposal.venue.name}</Text>
                 <View style={styles.subRow}>
                   <Text style={styles.venueArea}>{proposal.venue.area}</Text>
-                  <View style={styles.miniDot} />
-                  <Text style={styles.venueArea}>{formatDate(proposal.startsAt).replace(',', '')}</Text>
-                  <View style={styles.miniDot} />
-                  <Text style={styles.venueArea}>{formatTime(proposal.startsAt)}</Text>
+                  {(proposal.dateOptions?.length ?? 1) <= 1 && (
+                    <>
+                      <View style={styles.miniDot} />
+                      <Text style={styles.venueArea}>{formatDate(proposal.startsAt).replace(',', '')}</Text>
+                      <View style={styles.miniDot} />
+                      <Text style={styles.venueArea}>{formatTime(proposal.startsAt)}</Text>
+                    </>
+                  )}
                 </View>
+
+                {/* Several slots offered — show them all so she can see her options */}
+                {(proposal.dateOptions?.length ?? 0) > 1 && (
+                  <View style={styles.slotsCard}>
+                    <Text style={styles.slotsTitle}>
+                      Pick whichever suits you
+                    </Text>
+                    {proposal.dateOptions!.slice(0, 3).map((iso) => (
+                      <View key={iso} style={styles.slotRow}>
+                        <Ionicons name="calendar-outline" size={14} color={COLORS.BRAND} />
+                        <Text style={styles.slotText}>
+                          {formatDate(iso).replace(',', '')} · {formatTime(iso)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
 
                 {/* Video message — mandatory for every proposal */}
                 {proposal.videoUrl ? (
@@ -643,6 +688,17 @@ const styles = StyleSheet.create({
     flex: 1, fontSize: 13, color: COLORS.TEXT_SECONDARY, lineHeight: 20,
     fontStyle: 'italic',
   },
+
+  slotsCard: {
+    backgroundColor: COLORS.BRAND_MUTED, borderRadius: 16, padding: 14, marginBottom: 18,
+    gap: 8, borderWidth: 1, borderColor: COLORS.BRAND + '25',
+  },
+  slotsTitle: {
+    fontSize: 10, fontWeight: '900', color: COLORS.BRAND,
+    letterSpacing: 1.2, textTransform: 'uppercase',
+  },
+  slotRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  slotText: { fontSize: 14, fontWeight: '600', color: COLORS.TEXT },
 
   attachCard: {
     flexDirection: 'row', alignItems: 'center', gap: 12,

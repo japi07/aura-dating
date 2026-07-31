@@ -46,7 +46,10 @@ export interface Proposal {
   matchScore: number;
   matchReason: string;
   venue: Venue;
+  /** The confirmed (or first proposed) slot */
   startsAt: string; // ISO datetime
+  /** Every slot the sender offered — the recipient picks one on accept */
+  dateOptions?: string[];
   payment: 'he-pays' | 'split' | 'she-pays' | 'free';
   message: string;
   /** Mandatory short video introduction recorded by the proposer */
@@ -80,7 +83,8 @@ interface ProposalsState {
   refreshProposals: () => Promise<void>;
   /** Create and send a proposal — stored on the server when signed in */
   sendProposal: (p: Omit<Proposal, 'id' | 'createdAt' | 'expiresAt'>) => Promise<Proposal>;
-  acceptProposal: (id: string) => Promise<Proposal | null>;
+  /** Accept, optionally choosing one of the offered slots */
+  acceptProposal: (id: string, chosenStartsAt?: string) => Promise<Proposal | null>;
   declineProposal: (id: string) => Promise<void>;
   /** Pending proposals received by the given email (the current user) */
   pendingForUser: (email: string) => Proposal[];
@@ -200,9 +204,16 @@ export const useProposalsStore = create<ProposalsState>((set, get) => ({
     return proposal;
   },
 
-  acceptProposal: async (id: string) => {
-    const p = get().proposals.find(x => x.id === id);
-    if (!p) return null;
+  acceptProposal: async (id: string, chosenStartsAt?: string) => {
+    const existing = get().proposals.find(x => x.id === id);
+    if (!existing) return null;
+    // Lock in the slot she picked so the rest of the app (calendar, reminders,
+    // the confirmed date) all use the agreed time rather than the first offer.
+    const p = chosenStartsAt ? { ...existing, startsAt: chosenStartsAt } : existing;
+    if (chosenStartsAt) {
+      const updated = get().proposals.map(x => (x.id === id ? p : x));
+      set({ proposals: updated });
+    }
 
     // Optimistic local decision so the UI responds instantly
     const decisions = {
@@ -215,7 +226,7 @@ export const useProposalsStore = create<ProposalsState>((set, get) => ({
     // Server update — fires the trigger that creates the confirmed date
     if (!id.startsWith('prop_')) {
       try {
-        await decideProposalOnServer(id, 'accepted');
+        await decideProposalOnServer(id, 'accepted', chosenStartsAt);
       } catch (e: any) {
         set({ error: e?.message || 'Could not sync your acceptance' });
       }
