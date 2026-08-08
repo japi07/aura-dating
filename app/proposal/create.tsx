@@ -10,8 +10,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { COLORS } from '@/constants/colors';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
-import { DateField } from '@/components/DateField';
-import { TimeField } from '@/components/TimeField';
+import { DatePlanner, planToISO, type DayPlan } from '@/components/DatePlanner';
 import { MemberCard } from '@/components/MemberCard';
 import { MemberDetailSheet } from '@/components/MemberDetailSheet';
 import { pickAttachment, iconForMime, type PickedAttachment } from '@/lib/attachment-picker';
@@ -96,12 +95,8 @@ export default function CreateProposalScreen() {
   const [venue, setVenue] = useState('');
   const [area, setArea] = useState('');
   const [alternativePlan, setAlternativePlan] = useState('');
-  // Up to three slots so she can pick whichever suits her
-  const [slots, setSlots] = useState<{ date: string; time: string }[]>([
-    { date: '', time: '' }, { date: '', time: '' }, { date: '', time: '' },
-  ]);
-  const setSlot = (i: number, patch: Partial<{ date: string; time: string }>) =>
-    setSlots((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+  // Days + the times you're free on each, so she can pick what suits her
+  const [dayPlans, setDayPlans] = useState<DayPlan[]>([]);
   const [paymentArrangement, setPaymentArrangement] = useState('');
 
   // Mandatory video introduction
@@ -167,19 +162,16 @@ export default function CreateProposalScreen() {
     else if (message.length < 10) e.message = 'At least 10 characters';
     if (!dateType) e.dateType = 'Select a date type';
     if (!venue.trim()) e.venue = 'Tell her where you\'re taking her';
-    if (!slots[0].date.trim() || !slots[0].time.trim()) {
-      e.slot0 = 'Offer at least one date and time';
+    if (parseSlots().length === 0) {
+      e.slot0 = 'Add at least one day and time you\'re free';
     }
     // Payment is intentionally optional — plenty of good dates cost nothing.
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  /** Every filled-in slot, as ISO datetimes, in the order offered */
-  const parseSlots = (): string[] =>
-    slots
-      .filter((s) => s.date.trim() && s.time.trim())
-      .map((s) => parseOne(s.date, s.time));
+  /** Every offered slot as an ISO datetime, earliest first */
+  const parseSlots = (): string[] => planToISO(dayPlans);
 
   /** Try to parse a date+time pair into a real ISO datetime */
   const parseOne = (preferredDate: string, preferredTime: string): string => {
@@ -572,38 +564,13 @@ export default function CreateProposalScreen() {
 
           <Input label="Alternative plan (optional)" placeholder="A backup idea in case that doesn't suit them" value={alternativePlan} onChangeText={setAlternativePlan} icon="repeat-outline" />
 
-          {/* Up to three slots so she can pick what suits her */}
-          <Text style={styles.sectionLbl}>When works for you?</Text>
+          {/* Availability planner — she picks whichever slot suits her */}
+          <Text style={styles.sectionLbl}>When are you free?</Text>
           <Text style={styles.fieldHint}>
-            Offer up to three options and she'll pick whichever fits her week.
-            Only the first is required.
+            Offer a few days and times. She'll pick whichever fits her week,
+            so the date doesn't hinge on one take-it-or-leave-it slot.
           </Text>
-
-          {slots.map((s, i) => (
-            <View key={i} style={styles.slotBlock}>
-              <Text style={styles.slotLabel}>
-                {i === 0 ? 'Option 1' : `Option ${i + 1} (optional)`}
-              </Text>
-              <View style={styles.row}>
-                <View style={{ flex: 1 }}>
-                  <DateField
-                    value={s.date}
-                    onChange={(v) => setSlot(i, { date: v })}
-                    mode="future"
-                    placeholder="Pick a date"
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <TimeField
-                    value={s.time}
-                    onChange={(v) => setSlot(i, { time: v })}
-                    placeholder="Pick a time"
-                  />
-                </View>
-              </View>
-            </View>
-          ))}
-          {errors.slot0 && <Text style={styles.err}>{errors.slot0}</Text>}
+          <DatePlanner value={dayPlans} onChange={setDayPlans} error={errors.slot0} />
         </View>
 
         {/* Payment */}

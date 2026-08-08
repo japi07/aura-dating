@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, TouchableOpacity,
   Image, StatusBar, Alert, RefreshControl, ActivityIndicator,
-  Animated, Dimensions, Easing, Linking,
+  Animated, Dimensions, Easing, Linking, Modal, Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -38,6 +38,8 @@ export default function TodayScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
+  // Slot chooser shown when he offered several times
+  const [slotPicker, setSlotPicker] = useState<{ proposal: Proposal; options: string[] } | null>(null);
 
   // Subtle entrance animation
   const fade = useRef(new Animated.Value(0)).current;
@@ -88,21 +90,12 @@ export default function TodayScreen() {
   const handleAccept = (p: Proposal) => {
     const options = (p.dateOptions?.length ? p.dateOptions : [p.startsAt])
       .filter(Boolean)
-      .slice(0, 3);
+      .sort();
 
-    // More than one slot offered? Let her choose before confirming.
+    // More than one slot offered? Let her choose before confirming. A long
+    // list goes to a proper sheet — an alert with eight buttons is unusable.
     if (options.length > 1) {
-      Alert.alert(
-        'Which suits you?',
-        `${p.from.name.split(' ')[0]} offered ${options.length} times for ${p.venue.name}.`,
-        [
-          ...options.map((iso) => ({
-            text: `${formatDate(iso)} · ${formatTime(iso)}`,
-            onPress: () => confirmAccept(p, iso),
-          })),
-          { text: 'Not yet', style: 'cancel' as const },
-        ],
-      );
+      setSlotPicker({ proposal: p, options });
       return;
     }
     confirmAccept(p, options[0]);
@@ -371,20 +364,23 @@ export default function TodayScreen() {
                   )}
                 </View>
 
-                {/* Several slots offered — show them all so she can see her options */}
+                {/* Several slots offered — grouped by day so it stays readable */}
                 {(proposal.dateOptions?.length ?? 0) > 1 && (
                   <View style={styles.slotsCard}>
-                    <Text style={styles.slotsTitle}>
-                      Pick whichever suits you
-                    </Text>
-                    {proposal.dateOptions!.slice(0, 3).map((iso) => (
-                      <View key={iso} style={styles.slotRow}>
-                        <Ionicons name="calendar-outline" size={14} color={COLORS.BRAND} />
-                        <Text style={styles.slotText}>
-                          {formatDate(iso).replace(',', '')} · {formatTime(iso)}
-                        </Text>
+                    <Text style={styles.slotsTitle}>He's free at these times</Text>
+                    {groupByDay(proposal.dateOptions!).map(({ day, times }) => (
+                      <View key={day} style={styles.slotDayRow}>
+                        <Text style={styles.slotDay}>{day}</Text>
+                        <View style={styles.slotTimes}>
+                          {times.map((t) => (
+                            <View key={t.iso} style={styles.slotPill}>
+                              <Text style={styles.slotPillText}>{t.label}</Text>
+                            </View>
+                          ))}
+                        </View>
                       </View>
                     ))}
+                    <Text style={styles.slotsFoot}>Pick whichever suits you when you accept</Text>
                   </View>
                 )}
 
@@ -559,8 +555,64 @@ export default function TodayScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
+
+      {/* Which of his offered slots suits her */}
+      <Modal
+        visible={!!slotPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSlotPicker(null)}
+      >
+        <Pressable style={styles.pickerBackdrop} onPress={() => setSlotPicker(null)}>
+          <Pressable style={styles.pickerSheet} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.pickerTitle}>Which time suits you?</Text>
+            <Text style={styles.pickerSub}>
+              {slotPicker
+                ? `${slotPicker.proposal.from.name.split(' ')[0]} is free at these times for ${slotPicker.proposal.venue.name}.`
+                : ''}
+            </Text>
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              {slotPicker && groupByDay(slotPicker.options).map(({ day, times }) => (
+                <View key={day} style={{ marginBottom: 14 }}>
+                  <Text style={styles.pickerDay}>{day}</Text>
+                  <View style={styles.pickerTimes}>
+                    {times.map((t) => (
+                      <TouchableOpacity
+                        key={t.iso}
+                        style={styles.pickerChip}
+                        onPress={() => {
+                          const p = slotPicker.proposal;
+                          setSlotPicker(null);
+                          confirmAccept(p, t.iso);
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.pickerChipText}>{t.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={styles.pickerCancel} onPress={() => setSlotPicker(null)}>
+              <Text style={styles.pickerCancelText}>Not yet</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
+}
+
+/** Group offered slots by day so a long list stays readable */
+function groupByDay(isos: string[]): { day: string; times: { iso: string; label: string }[] }[] {
+  const map = new Map<string, { iso: string; label: string }[]>();
+  for (const iso of [...isos].sort()) {
+    const day = formatDate(iso).replace(',', '');
+    if (!map.has(day)) map.set(day, []);
+    map.get(day)!.push({ iso, label: formatTime(iso) });
+  }
+  return Array.from(map, ([day, times]) => ({ day, times }));
 }
 
 function DetailMini({ icon, text, accent }: { icon: any; text: string; accent?: boolean }) {
@@ -699,8 +751,33 @@ const styles = StyleSheet.create({
     fontSize: 10, fontWeight: '900', color: COLORS.BRAND,
     letterSpacing: 1.2, textTransform: 'uppercase',
   },
-  slotRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  slotText: { fontSize: 14, fontWeight: '600', color: COLORS.TEXT },
+  slotDayRow: { gap: 6 },
+  slotDay: { fontSize: 13, fontWeight: '800', color: COLORS.TEXT },
+  slotTimes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  slotPill: {
+    backgroundColor: COLORS.SURFACE, paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 10, borderWidth: 1, borderColor: COLORS.BRAND + '30',
+  },
+  slotPillText: { fontSize: 12, fontWeight: '700', color: COLORS.BRAND },
+  slotsFoot: { fontSize: 11, color: COLORS.TEXT_MUTED, fontStyle: 'italic', marginTop: 2 },
+
+  /* Slot chooser */
+  pickerBackdrop: { flex: 1, backgroundColor: 'rgba(20,16,40,0.5)', justifyContent: 'flex-end' },
+  pickerSheet: {
+    backgroundColor: COLORS.SURFACE, borderTopLeftRadius: 26, borderTopRightRadius: 26,
+    padding: 22, paddingBottom: 34,
+  },
+  pickerTitle: { fontSize: 20, fontWeight: '900', color: COLORS.TEXT, letterSpacing: -0.4 },
+  pickerSub: { fontSize: 13, color: COLORS.TEXT_MUTED, marginTop: 4, marginBottom: 18, lineHeight: 18 },
+  pickerDay: { fontSize: 13, fontWeight: '800', color: COLORS.TEXT, marginBottom: 8 },
+  pickerTimes: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  pickerChip: {
+    paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14,
+    backgroundColor: COLORS.BRAND_MUTED, borderWidth: 1.5, borderColor: COLORS.BRAND,
+  },
+  pickerChipText: { fontSize: 14, fontWeight: '800', color: COLORS.BRAND },
+  pickerCancel: { paddingVertical: 14, alignItems: 'center', marginTop: 6 },
+  pickerCancelText: { fontSize: 14, fontWeight: '700', color: COLORS.TEXT_MUTED },
 
   attachCard: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
