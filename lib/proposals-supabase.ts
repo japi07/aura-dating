@@ -266,7 +266,8 @@ function rowToDate(row: any, myId: string): ConfirmedDate {
     },
     venue: {
       id: `srv_${row.id}`,
-      name: row.venue_name,
+      // Null until ops picks a venue for a blind/call date
+      name: row.venue_name ?? 'Being planned',
       address: row.venue_address ?? '',
       postcode: row.venue_postcode ?? '',
       area: '',
@@ -276,7 +277,8 @@ function rowToDate(row: any, myId: string): ConfirmedDate {
       emoji: '📍',
     },
     category: 'dinner',
-    startsAt: row.starts_at,
+    startsAt: row.starts_at ?? null,
+    mode: (row.mode ?? 'proposal') as ConfirmedDate['mode'],
     payment: row.payment ?? 'split',
     reminderIds: [],
     status: (row.status === 'no-show' ? 'completed' : row.status) as ConfirmedDate['status'],

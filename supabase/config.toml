@@ -26,3 +26,8 @@ verify_jwt = false
 # Persona calls this without a Supabase JWT — auth is the shared secret
 [functions.persona-webhook]
 verify_jwt = false
+
+# Matching is cross-user, so it runs with the service role and is invoked
+# by ops or an external cron rather than by the app.
+[functions.blind-match]
+verify_jwt = false

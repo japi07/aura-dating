@@ -38,6 +38,10 @@ export default function DatesScreen() {
   };
 
   const handleAddCalendar = async (d: ConfirmedDate) => {
+    if (!d.startsAt) {
+      Alert.alert('Not scheduled yet', 'We\'ll add it to your calendar once the time is confirmed.');
+      return;
+    }
     const ok = await addDateToCalendar({
       title: `Date with ${d.with.name} — ${d.venue.name}`,
       notes: `${d.category} · ${paymentLabel(d.payment)}`,
@@ -51,7 +55,9 @@ export default function DatesScreen() {
   const handleCancel = (d: ConfirmedDate) => {
     Alert.alert(
       `Cancel date with ${d.with.name}?`,
-      `${d.venue.name}\n${formatDate(d.startsAt)} · ${formatTime(d.startsAt)}\n\nThey'll be notified respectfully and your reminders cancelled.`,
+      d.startsAt
+        ? `${d.venue.name}\n${formatDate(d.startsAt)} · ${formatTime(d.startsAt)}\n\nThey'll be notified respectfully and your reminders cancelled.`
+        : 'This date is still being planned.\n\nThey\'ll be notified respectfully.',
       [
         { text: 'Keep date', style: 'cancel' },
         {
@@ -73,7 +79,7 @@ export default function DatesScreen() {
 
   /** The follow-up window closes 24h after the date starts */
   const followUpOpen = (d: ConfirmedDate) =>
-    Date.now() < new Date(d.startsAt).getTime() + 24 * 60 * 60 * 1000;
+    !!d.startsAt && Date.now() < new Date(d.startsAt).getTime() + 24 * 60 * 60 * 1000;
 
   const handleInterest = (d: ConfirmedDate, interest: DateInterest) => {
     setDateInterest(d.id, interest);
@@ -126,16 +132,18 @@ export default function DatesScreen() {
             </View>
           ) : (
             upcomingList.map((d) => {
-              const countdown = formatCountdown(d.startsAt);
-              const isUrgent = countdown === 'Today' || countdown.startsWith('In ') && countdown.includes('hour');
-              const isTomorrow = countdown === 'Tomorrow';
-              const bannerColor = isUrgent ? COLORS.BRAND : isTomorrow ? COLORS.WARNING_LIGHT : COLORS.SUCCESS_LIGHT;
-              const bannerText = isUrgent ? '#fff' : isTomorrow ? COLORS.WARNING : COLORS.SUCCESS;
+              // A blind/call date exists before ops has picked a venue or time
+              const planning = d.status === 'planning' || !d.startsAt;
+              const countdown = planning ? 'We’re planning it' : formatCountdown(d.startsAt!);
+              const isUrgent = !planning && (countdown === 'Today' || (countdown.startsWith('In ') && countdown.includes('hour')));
+              const isTomorrow = !planning && countdown === 'Tomorrow';
+              const bannerColor = planning ? COLORS.GOLD_MUTED : isUrgent ? COLORS.BRAND : isTomorrow ? COLORS.WARNING_LIGHT : COLORS.SUCCESS_LIGHT;
+              const bannerText = planning ? COLORS.GOLD_DEEP : isUrgent ? '#fff' : isTomorrow ? COLORS.WARNING : COLORS.SUCCESS;
 
               return (
                 <View key={d.id} style={styles.upcomingCard}>
                   <View style={[styles.statusBanner, { backgroundColor: bannerColor }]}>
-                    <Ionicons name="time-outline" size={14} color={bannerText} />
+                    <Ionicons name={planning ? 'sparkles-outline' : 'time-outline'} size={14} color={bannerText} />
                     <Text style={[styles.statusBannerText, { color: bannerText }]}>{countdown}</Text>
                   </View>
 
@@ -170,7 +178,11 @@ export default function DatesScreen() {
 
                       <View style={styles.planRow}>
                         <Ionicons name="calendar-outline" size={14} color={COLORS.TEXT_SECONDARY} />
-                        <Text style={styles.planRowText}>{formatDate(d.startsAt)} · {formatTime(d.startsAt)}</Text>
+                        <Text style={styles.planRowText}>
+                          {planning
+                            ? (d.mode === 'blind' ? 'Date and venue to be confirmed' : 'We’ll confirm the details shortly')
+                            : `${formatDate(d.startsAt!)} · ${formatTime(d.startsAt!)}`}
+                        </Text>
                       </View>
                       <View style={styles.planRow}>
                         <Ionicons name="location-outline" size={14} color={COLORS.TEXT_SECONDARY} />
@@ -254,7 +266,9 @@ export default function DatesScreen() {
                   )}
                   <View style={{ flex: 1 }}>
                     <Text style={styles.pastName}>{d.with.name}, {d.with.age}</Text>
-                    <Text style={styles.pastWhen}>{formatDate(d.startsAt)} · {formatTime(d.startsAt)}</Text>
+                    <Text style={styles.pastWhen}>
+                      {d.startsAt ? `${formatDate(d.startsAt)} · ${formatTime(d.startsAt)}` : 'Never scheduled'}
+                    </Text>
                   </View>
                   <Text style={styles.pastEmoji}>{d.venue.emoji}</Text>
                 </View>
