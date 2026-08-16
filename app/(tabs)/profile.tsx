@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet, View, Text, ScrollView,
   Alert, TouchableOpacity, Image, Dimensions, StatusBar, Share,
@@ -12,6 +12,7 @@ import { useDatesStore } from '@/store/dates';
 import { COLORS } from '@/constants/colors';
 import { MemberCard } from '@/components/MemberCard';
 import { canSendProposals } from '@/lib/roles';
+import { amIAdmin } from '@/lib/ops-supabase';
 
 const SW = Dimensions.get('window').width;
 
@@ -88,6 +89,11 @@ export default function ProfileScreen() {
     ]);
   };
 
+  // The concierge console is hidden entirely unless the account is flagged as
+  // ops — members never see a row they cannot open.
+  const [isOps, setIsOps] = useState(false);
+  useEffect(() => { amIAdmin().then(setIsOps).catch(() => setIsOps(false)); }, []);
+
   const settings = [
     // Sending is for proposers only — women receive proposals rather than send
     ...(canSendProposals(profile)
@@ -99,6 +105,9 @@ export default function ProfileScreen() {
     { icon: 'shield-outline', label: 'Safety center', desc: 'SOS, blocked, safety tips', color: '#25D997', route: '/settings/safety' },
     { icon: 'diamond-outline', label: 'Aura Gold', desc: 'Premium membership', color: '#FFCF40', route: '/settings/subscription', highlight: true },
     { icon: 'help-circle-outline', label: 'Help & Support', desc: 'FAQ & contact us', color: '#A78BFA', route: '/settings/help' },
+    ...(isOps
+      ? [{ icon: 'construct-outline', label: 'Concierge console', desc: 'Plan dates and run the matcher', color: COLORS.PLUM, route: '/ops' }]
+      : []),
   ];
 
   return (

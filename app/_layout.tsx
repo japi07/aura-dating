@@ -190,6 +190,7 @@ export default function RootLayout() {
         <Stack.Screen name="meet/browse" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="meet/blind" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="meet/call" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="ops/index" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="sos" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="reset-password" options={{ animation: 'fade' }} />
         <Stack.Screen name="thread/[id]" options={{ animation: 'slide_from_right' }} />
