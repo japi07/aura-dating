@@ -31,3 +31,13 @@ verify_jwt = false
 # by ops or an external cron rather than by the app.
 [functions.blind-match]
 verify_jwt = false
+
+# Matching runs with the service role but is triggered by a signed-in member
+# joining the queue, so the JWT is how we know who is asking.
+[functions.call-match]
+verify_jwt = true
+
+# Mints a Daily meeting token. The room is private, so this function is the
+# access check for the whole call.
+[functions.call-token]
+verify_jwt = true

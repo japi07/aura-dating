@@ -13,6 +13,7 @@ import { useProposalsStore } from '@/store/proposals';
 import { canSendProposals } from '@/lib/roles';
 import { fetchMyBlindSignup, fetchPoolSize, type BlindSignup } from '@/lib/blind-supabase';
 import { callTransportAvailable } from '@/lib/call-transport';
+import { fetchQueueSize } from '@/lib/calls-supabase';
 
 /**
  * "Meet" — the hub where you choose how you want to meet someone.
@@ -32,6 +33,7 @@ export default function MeetScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [blind, setBlind] = useState<BlindSignup | null>(null);
   const [pool, setPool] = useState<{ bucket: string; enough: boolean } | null>(null);
+  const [callQueue, setCallQueue] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const isSender = canSendProposals(user);
@@ -39,9 +41,14 @@ export default function MeetScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [signup, size] = await Promise.all([fetchMyBlindSignup(), fetchPoolSize()]);
+      const [signup, size, queued] = await Promise.all([
+        fetchMyBlindSignup(),
+        fetchPoolSize(),
+        callTransportAvailable ? fetchQueueSize() : Promise.resolve(0),
+      ]);
       setBlind(signup);
       setPool(size);
+      setCallQueue(queued);
     } catch {
       // offline — cards fall back to their idle copy
     }
@@ -96,9 +103,11 @@ export default function MeetScreen() {
               title="Call first"
               tagline="A short live call before you commit to a whole evening."
               status={
-                callTransportAvailable
-                  ? 'Tap to join the queue'
-                  : 'Arrives in the next app update'
+                !callTransportAvailable
+                  ? 'Arrives in the next app update'
+                  : callQueue > 0
+                    ? `${callQueue} waiting right now`
+                    : 'Tap to join the queue'
               }
               statusTone={callTransportAvailable ? 'ready' : 'soon'}
               disabled={!callTransportAvailable}

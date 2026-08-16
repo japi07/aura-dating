@@ -28,7 +28,10 @@
         "NSLocationWhenInUseUsageDescription": "Aura uses your location to show real walking distance to your matches and venues.",
         "NSCalendarsUsageDescription": "Aura adds confirmed dates to your calendar so you never miss one.",
         "NSCalendarsFullAccessUsageDescription": "Aura adds confirmed dates to your calendar with reminders.",
-        "NSFaceIDUsageDescription": "Aura uses Face ID to verify you're a real human."
+        "NSFaceIDUsageDescription": "Aura uses Face ID to verify you're a real human.",
+        "UIBackgroundModes": [
+          "voip"
+        ]
       }
     },
     "android": {
@@ -102,7 +105,15 @@
         }
       ],
       "expo-apple-authentication",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "@daily-co/config-plugin-rn-daily-js",
+        {
+          "enableCamera": true,
+          "enableMicrophone": true,
+          "enableScreenShare": false
+        }
+      ]
     ],
     "extra": {
       "supabaseUrl": "https://krkibouizxurqboyahon.supabase.co",
@@ -118,7 +129,8 @@
       "router": {},
       "eas": {
         "projectId": "c2c7b6ed-e8eb-4a9d-a510-813a466bd68f"
-      }
+      },
+      "dailyEnabled": true
     },
     "owner": "azpi09",
     "runtimeVersion": {
