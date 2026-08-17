@@ -128,3 +128,25 @@ Both are real and both are iOS:
 `@config-plugins/react-native-webrtc` is **not** needed — it was folded into
 Daily's own plugin at 0.0.9. Daily's README still lists it in one place; that
 snippet is stale.
+
+---
+
+## Testing outside 19:00–21:00
+
+Everything that starts something — the call queue, the blind pool, sending a
+proposal — is gated to the nightly window. That is unarguable in production
+and miserable for testing, so there is a switch.
+
+In `app.json`:
+
+```json
+"extra": { "windowAlwaysOpen": true }
+```
+
+Set it to `true`, publish an OTA update, and every gate opens; set it back to
+`false` and publish again to restore the real hours. No rebuild either way,
+because `extra` travels in the update manifest. The countdown says "Testing
+mode" while it is on, so nobody mistakes it for the real thing.
+
+Development builds ignore the window entirely — waiting until 19:00 to check a
+layout is absurd.

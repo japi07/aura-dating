@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '@/constants/colors';
 import {
-  getWindowState, formatClock, formatShort,
+  getWindowState, formatClock, formatShort, windowOverridden,
   WINDOW_LABEL, WINDOW_RANGE_LABEL, type WindowState,
 } from '@/lib/daily-window';
 
@@ -65,7 +65,9 @@ function Hero({ w }: { w: WindowState }) {
         {w.open ? (
           <>
             <Animated.View style={[s.liveDot, { opacity: dotOpacity }]} />
-            <Text style={s.heroLabel}>Tonight's window is open</Text>
+            <Text style={s.heroLabel}>
+              {windowOverridden ? 'Testing mode' : 'Tonight\'s window is open'}
+            </Text>
           </>
         ) : (
           <>
@@ -76,13 +78,17 @@ function Hero({ w }: { w: WindowState }) {
       </View>
 
       <Text style={s.heroClock}>
-        {formatClock(w.open ? w.secondsUntilClose : w.secondsUntilOpen)}
+        {windowOverridden
+          ? 'OPEN'
+          : formatClock(w.open ? w.secondsUntilClose : w.secondsUntilOpen)}
       </Text>
 
       <Text style={s.heroSub}>
-        {w.open
-          ? 'left to start something tonight'
-          : `Everything opens together, ${WINDOW_RANGE_LABEL}`}
+        {windowOverridden
+          ? `Testing mode — normally ${WINDOW_RANGE_LABEL}`
+          : w.open
+            ? 'left to start something tonight'
+            : `Everything opens together, ${WINDOW_RANGE_LABEL}`}
       </Text>
     </LinearGradient>
   );
@@ -100,17 +106,23 @@ function Banner({ w }: { w: WindowState }) {
       </View>
       <View style={{ flex: 1 }}>
         <Text style={s.bannerTitle}>
-          {w.open ? 'The window is open' : `Tonight at ${WINDOW_LABEL}`}
+          {windowOverridden
+            ? 'Open for testing'
+            : w.open ? 'The window is open' : `Tonight at ${WINDOW_LABEL}`}
         </Text>
         <Text style={s.bannerSub}>
-          {w.open
-            ? `${formatShort(w.secondsUntilClose)} left to start something`
-            : `Opens in ${formatShort(w.secondsUntilOpen)}`}
+          {windowOverridden
+            ? `Testing mode — normally ${WINDOW_RANGE_LABEL}`
+            : w.open
+              ? `${formatShort(w.secondsUntilClose)} left to start something`
+              : `Opens in ${formatShort(w.secondsUntilOpen)}`}
         </Text>
       </View>
-      <Text style={[s.bannerClock, w.open && { color: COLORS.BRAND }]}>
-        {formatClock(w.open ? w.secondsUntilClose : w.secondsUntilOpen)}
-      </Text>
+      {!windowOverridden && (
+        <Text style={[s.bannerClock, w.open && { color: COLORS.BRAND }]}>
+          {formatClock(w.open ? w.secondsUntilClose : w.secondsUntilOpen)}
+        </Text>
+      )}
     </View>
   );
 }

@@ -130,7 +130,8 @@
       "eas": {
         "projectId": "c2c7b6ed-e8eb-4a9d-a510-813a466bd68f"
       },
-      "dailyEnabled": true
+      "dailyEnabled": true,
+      "windowAlwaysOpen": false
     },
     "owner": "azpi09",
     "runtimeVersion": {

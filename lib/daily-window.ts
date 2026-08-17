@@ -16,6 +16,28 @@
  *    window. That is fine for what it is; nothing here protects anything.
  */
 
+import Constants from 'expo-constants';
+
+/**
+ * Testing escape hatch.
+ *
+ * A two-hour window is unarguable in production and miserable in testing —
+ * it means nobody can try any of the three modes outside one slot a day.
+ * This reads from expo extra rather than a build constant precisely so it
+ * can be flipped in an over-the-air update: turn it on for a testing
+ * session, turn it off again, no rebuild either way.
+ *
+ * Development builds are always open, because waiting until 19:00 to check
+ * a layout is absurd.
+ */
+const alwaysOpen =
+  __DEV__ ||
+  (Constants.expoConfig?.extra as { windowAlwaysOpen?: boolean } | undefined)
+    ?.windowAlwaysOpen === true;
+
+/** True when the window is being bypassed rather than genuinely open. */
+export const windowOverridden = alwaysOpen;
+
 export const WINDOW_OPEN_HOUR = 19;
 export const WINDOW_CLOSE_HOUR = 21;
 export const WINDOW_TIMEZONE = 'Europe/London';
@@ -87,9 +109,11 @@ function londonWallClockToInstant(y: number, mo: number, d: number, h: number): 
 
 export function getWindowState(now: Date = new Date()): WindowState {
   const p = londonParts(now);
-  const open = p.h >= WINDOW_OPEN_HOUR && p.h < WINDOW_CLOSE_HOUR;
+  const open = alwaysOpen || (p.h >= WINDOW_OPEN_HOUR && p.h < WINDOW_CLOSE_HOUR);
 
   if (open) {
+    // When overridden outside the real hours, today's close is already past;
+    // clamping at zero beats rendering a negative countdown.
     const closeAt = londonWallClockToInstant(p.y, p.mo, p.d, WINDOW_CLOSE_HOUR);
     return {
       open: true,
