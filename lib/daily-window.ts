@@ -38,7 +38,17 @@ const alwaysOpen =
 /** True when the window is being bypassed rather than genuinely open. */
 export const windowOverridden = alwaysOpen;
 
-export const WINDOW_OPEN_HOUR = 19;
+/**
+ * TESTING HOURS. The product design is 19:00-21:00 - two hours, everyone at
+ * once, scarcity doing the work. Nine to nine is deliberately wide so a
+ * handful of testers in one city can actually bump into each other, which a
+ * two-hour slot makes almost impossible at this scale.
+ *
+ * Put this back to 19 before there are real members. The countdown, the
+ * gating and the copy all read from these two numbers, so it is the only
+ * edit needed.
+ */
+export const WINDOW_OPEN_HOUR = 9;
 export const WINDOW_CLOSE_HOUR = 21;
 export const WINDOW_TIMEZONE = 'Europe/London';
 

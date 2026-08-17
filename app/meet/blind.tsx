@@ -85,7 +85,7 @@ export default function BlindScreen() {
 
       <View style={s.header}>
         <TouchableOpacity
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/discover'))}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
           style={s.backBtn}
         >
           <Ionicons name="chevron-back" size={26} color={COLORS.TEXT} />
@@ -97,7 +97,7 @@ export default function BlindScreen() {
       {loading ? (
         <View style={s.centered}><ActivityIndicator color={COLORS.BRAND} /></View>
       ) : signup?.status === 'matched' ? (
-        <Matched onDates={() => router.replace('/(tabs)/dates')} />
+        <Matched onDates={() => router.replace('/(tabs)/connections')} />
       ) : signup?.status === 'waiting' ? (
         <Waiting pool={pool} busy={busy} onLeave={leave} />
       ) : (

@@ -268,7 +268,7 @@ export default function CallScreen() {
           <TouchableOpacity
             onPress={() => {
               if (phase === 'waiting') { cancelWaiting(); return; }
-              router.canGoBack() ? router.back() : router.replace('/(tabs)/discover');
+              router.canGoBack() ? router.back() : router.replace('/(tabs)');
             }}
             style={s.backBtn}
           >
@@ -322,7 +322,7 @@ export default function CallScreen() {
           name={call?.otherName ?? 'them'}
           saidYes={myAnswer === true}
           dateId={outcomeDateId}
-          onDates={() => router.replace('/(tabs)/dates')}
+          onDates={() => router.replace('/(tabs)/connections')}
           onAgain={() => { setCall(null); setPartnerHere(false); setPhase('intro'); }}
         />
       )}

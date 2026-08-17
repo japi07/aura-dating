@@ -63,7 +63,7 @@ export default function CreateProposalScreen() {
         </Text>
         <Text style={{ fontSize: 14, color: COLORS.TEXT_MUTED, marginTop: 8, textAlign: 'center', lineHeight: 20 }}>
           On Aura you receive curated date proposals rather than sending them.
-          They'll appear on your Today tab.
+          They'll appear under Proposals on your Meet tab.
         </Text>
         <TouchableOpacity
           style={{ marginTop: 22, paddingHorizontal: 22, paddingVertical: 13, borderRadius: 14, backgroundColor: COLORS.BRAND }}

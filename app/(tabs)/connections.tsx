@@ -127,7 +127,7 @@ export default function DatesScreen() {
               </View>
               <Text style={styles.emptyTitle}>No upcoming dates yet</Text>
               <Text style={styles.emptySub}>
-                Accept proposals from the Today tab to see your London dates here.
+                Accept a proposal from the Meet tab to see your London dates here.
               </Text>
             </View>
           ) : (

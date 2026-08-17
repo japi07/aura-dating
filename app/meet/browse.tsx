@@ -57,7 +57,7 @@ export default function BrowseScreen() {
 
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/discover"))}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
           style={styles.backBtn}
         >
           <Ionicons name="chevron-back" size={26} color={COLORS.TEXT} />

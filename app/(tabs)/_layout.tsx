@@ -29,15 +29,6 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Today',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'mail' : 'mail-outline'} color={color} badge={3} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="discover"
-        options={{
           title: 'Meet',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon name={focused ? 'sparkles' : 'sparkles-outline'} color={color} />
