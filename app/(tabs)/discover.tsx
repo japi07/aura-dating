@@ -14,6 +14,8 @@ import { canSendProposals } from '@/lib/roles';
 import { fetchMyBlindSignup, fetchPoolSize, type BlindSignup } from '@/lib/blind-supabase';
 import { callTransportAvailable } from '@/lib/call-transport';
 import { fetchQueueSize } from '@/lib/calls-supabase';
+import { WindowCountdown, useDailyWindow } from '@/components/WindowCountdown';
+import { formatShort, WINDOW_LABEL } from '@/lib/daily-window';
 
 /**
  * "Meet" — the hub where you choose how you want to meet someone.
@@ -34,6 +36,7 @@ export default function MeetScreen() {
   const [blind, setBlind] = useState<BlindSignup | null>(null);
   const [pool, setPool] = useState<{ bucket: string; enough: boolean } | null>(null);
   const [callQueue, setCallQueue] = useState(0);
+  const w = useDailyWindow();
   const [loading, setLoading] = useState(true);
 
   const isSender = canSendProposals(user);
@@ -83,7 +86,11 @@ export default function MeetScreen() {
 
       <View style={styles.header}>
         <Text style={styles.title}>Meet</Text>
-        <Text style={styles.sub}>Three ways to meet someone. Pick what suits you tonight.</Text>
+        <Text style={styles.sub}>
+          {w.open
+            ? 'Three ways to meet someone. Choose one before the window closes.'
+            : 'Three ways to meet someone. Everything opens together at ' + WINDOW_LABEL + '.'}
+        </Text>
       </View>
 
       <ScrollView
@@ -93,6 +100,8 @@ export default function MeetScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.BRAND} />
         }
       >
+        <WindowCountdown variant="hero" />
+
         {loading ? (
           <View style={{ paddingTop: 40 }}><ActivityIndicator color={COLORS.BRAND} /></View>
         ) : (
@@ -105,11 +114,13 @@ export default function MeetScreen() {
               status={
                 !callTransportAvailable
                   ? 'Arrives in the next app update'
-                  : callQueue > 0
-                    ? `${callQueue} waiting right now`
-                    : 'Tap to join the queue'
+                  : !w.open
+                    ? `Opens at ${WINDOW_LABEL} · ${formatShort(w.secondsUntilOpen)}`
+                    : callQueue > 0
+                      ? `${callQueue} waiting right now`
+                      : 'Tap to join the queue'
               }
-              statusTone={callTransportAvailable ? 'ready' : 'soon'}
+              statusTone={!callTransportAvailable || !w.open ? 'soon' : 'ready'}
               disabled={!callTransportAvailable}
               onPress={() => router.push('/meet/call')}
             />
@@ -118,17 +129,21 @@ export default function MeetScreen() {
             <ModeCard
               emoji="🎭"
               title="Blind date"
-              tagline="Tell us when you're free. We find someone and plan the whole thing."
+              tagline="One tap. We find someone, pick the place, and book it."
               status={
                 blind?.status === 'waiting'
                   ? 'You\'re in the pool — we\'re looking'
                   : blind?.status === 'matched'
                     ? 'Matched — see your Dates tab'
-                    : pool?.enough
-                      ? `${pool.bucket} people waiting`
-                      : 'Be one of the first to join'
+                    : !w.open
+                      ? `Opens at ${WINDOW_LABEL} · ${formatShort(w.secondsUntilOpen)}`
+                      : pool?.enough
+                        ? `${pool.bucket} people waiting`
+                        : 'Be one of the first to join'
               }
-              statusTone={blind?.status === 'waiting' ? 'active' : 'ready'}
+              statusTone={
+                blind?.status === 'waiting' ? 'active' : !w.open ? 'soon' : 'ready'
+              }
               onPress={() => router.push('/meet/blind')}
             />
 
@@ -142,15 +157,20 @@ export default function MeetScreen() {
                   : 'Invitations arrive on your Today tab. You choose which to accept.'
               }
               status={
-                isSender
-                  ? pendingOutbound > 0
+                pendingInbound > 0
+                  ? `${pendingInbound} waiting for you`
+                  : pendingOutbound > 0
                     ? `${pendingOutbound} awaiting a reply`
-                    : `${people.length} ${people.length === 1 ? 'person' : 'people'} to choose from`
-                  : pendingInbound > 0
-                    ? `${pendingInbound} waiting for you`
-                    : 'Nothing pending right now'
+                    : isSender && !w.open
+                      ? `Opens at ${WINDOW_LABEL} · ${formatShort(w.secondsUntilOpen)}`
+                      : isSender
+                        ? `${people.length} ${people.length === 1 ? 'person' : 'people'} to choose from`
+                        : 'Nothing pending right now'
               }
-              statusTone={pendingInbound > 0 || pendingOutbound > 0 ? 'active' : 'ready'}
+              statusTone={
+                pendingInbound > 0 || pendingOutbound > 0 ? 'active'
+                  : isSender && !w.open ? 'soon' : 'ready'
+              }
               onPress={() =>
                 isSender ? router.push('/meet/browse') : router.push('/(tabs)')
               }
@@ -158,6 +178,8 @@ export default function MeetScreen() {
 
             <Text style={styles.foot}>
               However you meet, we plan the date itself — venue, time, the lot.
+              {'\n'}Everything opens together each evening, so you are choosing
+              alongside everyone else rather than scrolling alone.
             </Text>
           </>
         )}

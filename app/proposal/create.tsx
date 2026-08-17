@@ -15,6 +15,7 @@ import { MemberCard } from '@/components/MemberCard';
 import { MemberDetailSheet } from '@/components/MemberDetailSheet';
 import { pickAttachment, iconForMime, type PickedAttachment } from '@/lib/attachment-picker';
 import { canSendProposals } from '@/lib/roles';
+import { WindowClosedNotice, useDailyWindow } from '@/components/WindowCountdown';
 import { useAuthStore } from '@/store/auth';
 import { useProposalsStore } from '@/store/proposals';
 import { useUsersStore, type DirectoryUser } from '@/store/users';
@@ -47,6 +48,8 @@ export default function CreateProposalScreen() {
     refreshFromServer: refreshUsersFromServer,
   } = useUsersStore();
   const [loading, setLoading] = useState(false);
+  // Read before the early return below, so the hook order never changes
+  const w = useDailyWindow();
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Safety net: the entry points are already hidden for non-proposers, but
@@ -280,6 +283,7 @@ export default function CreateProposalScreen() {
   };
 
   const handleSend = async () => {
+    if (!w.open) return;
     if (!validateForm()) return;
     setLoading(true);
     try {
@@ -604,7 +608,11 @@ export default function CreateProposalScreen() {
           </View>
         </View>
 
-        <Button title="Send Proposal" onPress={handleSend} loading={loading} size="lg" style={{ width: '100%', marginTop: 4 }} />
+        {w.open ? (
+          <Button title="Send Proposal" onPress={handleSend} loading={loading} size="lg" style={{ width: '100%', marginTop: 4 }} />
+        ) : (
+          <WindowClosedNotice secondsUntilOpen={w.secondsUntilOpen} />
+        )}
       </ScrollView>
 
       {/* Full profile preview */}

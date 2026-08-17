@@ -19,6 +19,7 @@ import { addDateToCalendar } from '@/lib/calendar';
 import { blockUserOnServer, reportUserOnServer } from '@/lib/profile-supabase';
 import { iconForMime } from '@/lib/attachment-picker';
 import { canSendProposals } from '@/lib/roles';
+import { WindowCountdown } from '@/components/WindowCountdown';
 import {
   formatDate, formatTime, formatCountdown,
   greeting, todayLong, paymentLabel,
@@ -260,6 +261,12 @@ export default function TodayScreen() {
               <Text style={styles.dateText}>{todayLong().toUpperCase()} · LONDON</Text>
               <View style={styles.dot} />
             </View>
+          </View>
+
+          {/* The nightly window. Sits above everything because it is the
+              answer to "why is nothing happening yet" and to "why now". */}
+          <View style={styles.windowWrap}>
+            <WindowCountdown variant="banner" />
           </View>
 
           {/* Greeting */}
@@ -638,6 +645,7 @@ const styles = StyleSheet.create({
   bgGradient: { ...StyleSheet.absoluteFillObject, height: 360 },
 
   /* Date pill */
+  windowWrap: { paddingHorizontal: 20, marginTop: 14 },
   datePillWrap: { alignItems: 'center', paddingTop: 8, paddingBottom: 8 },
   datePill: {
     flexDirection: 'row', alignItems: 'center', gap: 8,

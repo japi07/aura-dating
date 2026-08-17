@@ -1,94 +1,83 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  StyleSheet, View, Text, ScrollView, TouchableOpacity,
-  StatusBar, Alert, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform,
+  StyleSheet, View, Text, TouchableOpacity, StatusBar, ScrollView,
+  ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
-import { LONDON_AREAS, VENUE_THEMES } from '@/constants/london';
-import { DateField } from '@/components/DateField';
+import { WindowClosedNotice, useDailyWindow } from '@/components/WindowCountdown';
 import {
-  fetchMyBlindSignup, joinBlindPool, leaveBlindPool,
-  TIME_BANDS, BUDGETS, type BlindSignup, type Budget,
+  fetchMyBlindSignup, fetchPoolSize, joinBlindPool, leaveBlindPool,
+  type BlindSignup,
 } from '@/lib/blind-supabase';
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
-const inDaysISO = (n: number) =>
-  new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
-
 /**
- * Blind date opt-in. The user never picks a person — they state the
- * constraints the concierge must work within, then wait.
+ * Blind dates.
+ *
+ * One button. The previous version asked for areas, budget, a date range,
+ * time bands, styles and dietary needs before you could join — a lot of form
+ * for a mode whose entire pitch is that you don't have to decide anything.
+ * Worse, every extra axis was a way for two people to fail to overlap, which
+ * in a small pool is most of them.
+ *
+ * What you're actually agreeing to is stated plainly instead, because that
+ * part does matter: a real evening, a real stranger, and you turn up.
  */
-export default function BlindDateScreen() {
+export default function BlindScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const w = useDailyWindow();
+
   const [signup, setSignup] = useState<BlindSignup | null>(null);
+  const [pool, setPool] = useState<{ bucket: string; enough: boolean } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
 
-  const [areas, setAreas] = useState<string[]>([]);
-  const [styles_, setStyles_] = useState<string[]>([]);
-  const [budget, setBudget] = useState<Budget>('mid');
-  const [from, setFrom] = useState(todayISO());
-  const [to, setTo] = useState(inDaysISO(21));
-  const [bands, setBands] = useState<string[]>([]);
-  const [dietary, setDietary] = useState('');
-  const [accessibility, setAccessibility] = useState('');
-
-  useEffect(() => {
-    (async () => {
-      try { setSignup(await fetchMyBlindSignup()); } catch {}
-      setLoading(false);
-    })();
+  const load = useCallback(async () => {
+    try {
+      const [mine, size] = await Promise.all([fetchMyBlindSignup(), fetchPoolSize()]);
+      setSignup(mine);
+      setPool(size);
+    } catch {
+      // offline — the idle state is still correct
+    }
   }, []);
 
-  const toggle = (list: string[], set: (v: string[]) => void, v: string) =>
-    set(list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+  useEffect(() => { (async () => { await load(); setLoading(false); })(); }, [load]);
 
   const join = async () => {
-    setSaving(true);
+    setBusy(true);
     try {
-      const s = await joinBlindPool({
-        areas, dateStyles: styles_, budget,
-        availableFrom: from, availableTo: to, timeBands: bands,
-        dietary, accessibility,
-      });
-      setSignup(s);
-      Alert.alert(
-        'You\'re in',
-        'We\'ll find someone compatible and plan the whole date. You\'ll hear from us before it\'s confirmed.',
-      );
+      setSignup(await joinBlindPool());
+      await load();
     } catch (e: any) {
       Alert.alert('Could not join', e?.message || 'Please try again.');
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   };
 
-  const leave = () => {
+  const leave = async () => {
     if (!signup) return;
-    Alert.alert('Leave the pool?', 'We\'ll stop looking for a match for you.', [
-      { text: 'Stay in', style: 'cancel' },
-      {
-        text: 'Leave',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await leaveBlindPool(signup.id);
-            setSignup(null);
-          } catch (e: any) {
-            Alert.alert('Could not leave', e?.message || 'Please try again.');
-          }
+    Alert.alert(
+      'Leave the pool?',
+      'You can join again during any evening window.',
+      [
+        { text: 'Stay in', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: async () => {
+            setBusy(true);
+            try { await leaveBlindPool(signup.id); setSignup(null); await load(); }
+            catch (e: any) { Alert.alert('Could not leave', e?.message || 'Please try again.'); }
+            finally { setBusy(false); }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
-
-  const dateStyleOptions = Array.from(
-    new Map(VENUE_THEMES.map((t) => [t.label, t])).values(),
-  );
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
@@ -106,181 +95,137 @@ export default function BlindDateScreen() {
       </View>
 
       {loading ? (
-        <View style={s.center}><ActivityIndicator color={COLORS.BRAND} /></View>
-      ) : signup?.status === 'waiting' ? (
-        /* ── Already in the pool ── */
-        <ScrollView contentContainerStyle={s.body}>
-          <View style={s.waitingHero}>
-            <Text style={s.waitingEmoji}>🎭</Text>
-            <Text style={s.waitingTitle}>We're looking</Text>
-            <Text style={s.waitingSub}>
-              You're in the pool. When we find someone compatible we'll plan the
-              date and let you know — you'll see who they are 24 hours before.
-            </Text>
-          </View>
-
-          <View style={s.summaryCard}>
-            <Row label="Areas" value={signup.areas.join(', ') || 'Anywhere'} />
-            <Row label="When" value={signup.timeBands
-              .map((b) => TIME_BANDS.find((t) => t.key === b)?.label ?? b).join(', ')} />
-            <Row label="Between" value={`${signup.availableFrom} and ${signup.availableTo}`} />
-            <Row label="Budget" value={BUDGETS.find((b) => b.key === signup.budget)?.label ?? ''} />
-          </View>
-
-          <TouchableOpacity style={s.leaveBtn} onPress={leave}>
-            <Text style={s.leaveText}>Leave the pool</Text>
-          </TouchableOpacity>
-        </ScrollView>
+        <View style={s.centered}><ActivityIndicator color={COLORS.BRAND} /></View>
       ) : signup?.status === 'matched' ? (
-        /* ── Matched ── */
-        <View style={s.center}>
-          <Text style={s.waitingEmoji}>✨</Text>
-          <Text style={s.waitingTitle}>You've been matched</Text>
-          <Text style={[s.waitingSub, { textAlign: 'center' }]}>
-            We're planning your date now. Check the Dates tab for details.
-          </Text>
-          <TouchableOpacity style={s.primaryBtn} onPress={() => router.replace('/(tabs)/connections')}>
-            <Text style={s.primaryText}>See my dates</Text>
-          </TouchableOpacity>
-        </View>
+        <Matched onDates={() => router.replace('/(tabs)/dates')} />
+      ) : signup?.status === 'waiting' ? (
+        <Waiting pool={pool} busy={busy} onLeave={leave} />
       ) : (
-        /* ── Opt-in form ── */
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
-            <Text style={s.intro}>
-              You won't choose the person. Tell us what works for you and we'll
-              find someone compatible and plan the whole thing.
-            </Text>
-
-            <Section title="Where would suit you?" hint="Pick as many as you like.">
-              <Chips
-                options={LONDON_AREAS.slice(0, 18)}
-                selected={areas}
-                onToggle={(v) => toggle(areas, setAreas, v)}
-              />
-            </Section>
-
-            <Section title="When are you free?" hint="Broad bands — we'll pick the exact time.">
-              <Chips
-                options={TIME_BANDS.map((b) => b.label)}
-                selected={bands.map((b) => TIME_BANDS.find((t) => t.key === b)?.label ?? b)}
-                onToggle={(label) => {
-                  const key = TIME_BANDS.find((t) => t.label === label)?.key;
-                  if (key) toggle(bands, setBands, key);
-                }}
-              />
-            </Section>
-
-            <Section title="Between which dates?">
-              <View style={s.row}>
-                <View style={{ flex: 1 }}>
-                  <DateField label="From" value={from} onChange={setFrom} mode="future" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <DateField label="Until" value={to} onChange={setTo} mode="future" />
-                </View>
-              </View>
-            </Section>
-
-            <Section title="What kind of date?" hint="Optional — helps us pick well.">
-              <Chips
-                options={dateStyleOptions.map((t) => t.label)}
-                selected={styles_}
-                onToggle={(v) => toggle(styles_, setStyles_, v)}
-              />
-            </Section>
-
-            <Section title="Budget">
-              <View style={s.budgetRow}>
-                {BUDGETS.map((b) => {
-                  const on = budget === b.key;
-                  return (
-                    <TouchableOpacity
-                      key={b.key}
-                      style={[s.budgetCard, on && s.budgetCardOn]}
-                      onPress={() => setBudget(b.key)}
-                    >
-                      <Text style={[s.budgetLabel, on && { color: COLORS.BRAND }]}>{b.label}</Text>
-                      <Text style={s.budgetHint}>{b.hint}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </Section>
-
-            <Section title="Anything we should know?" hint="Dietary needs, accessibility — we'll brief the venue.">
-              <TextInput
-                style={s.input}
-                placeholder="e.g. vegetarian, no nuts"
-                placeholderTextColor={COLORS.TEXT_MUTED}
-                value={dietary}
-                onChangeText={setDietary}
-              />
-              <TextInput
-                style={[s.input, { marginTop: 10 }]}
-                placeholder="e.g. step-free access needed"
-                placeholderTextColor={COLORS.TEXT_MUTED}
-                value={accessibility}
-                onChangeText={setAccessibility}
-              />
-            </Section>
-
-            <View style={s.commitCard}>
-              <Ionicons name="hand-right-outline" size={18} color={COLORS.BRAND} />
-              <Text style={s.commitText}>
-                If we find you a match, you're committing to turn up. Cancelling
-                late or not showing affects future matches.
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={[s.primaryBtn, saving && { opacity: 0.7 }]}
-              onPress={join}
-              disabled={saving}
-            >
-              {saving
-                ? <ActivityIndicator color="#fff" />
-                : <Text style={s.primaryText}>Join the pool</Text>}
-            </TouchableOpacity>
-          </ScrollView>
-        </KeyboardAvoidingView>
+        <Idle
+          pool={pool}
+          busy={busy}
+          windowOpen={w.open}
+          secondsUntilOpen={w.secondsUntilOpen}
+          onJoin={join}
+        />
       )}
     </SafeAreaView>
   );
 }
 
-function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <View style={s.section}>
-      <Text style={s.sectionTitle}>{title}</Text>
-      {!!hint && <Text style={s.sectionHint}>{hint}</Text>}
-      {children}
-    </View>
-  );
-}
-
-function Chips({ options, selected, onToggle }: {
-  options: readonly string[]; selected: string[]; onToggle: (v: string) => void;
+function Idle({ pool, busy, windowOpen, secondsUntilOpen, onJoin }: {
+  pool: { bucket: string; enough: boolean } | null;
+  busy: boolean; windowOpen: boolean; secondsUntilOpen: number; onJoin: () => void;
 }) {
   return (
-    <View style={s.chipWrap}>
-      {options.map((o) => {
-        const on = selected.includes(o);
-        return (
-          <TouchableOpacity key={o} style={[s.chip, on && s.chipOn]} onPress={() => onToggle(o)}>
-            <Text style={[s.chipText, on && s.chipTextOn]}>{o}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
+    <ScrollView contentContainerStyle={s.body}>
+      <View style={s.hero}>
+        <Text style={s.emoji}>🎭</Text>
+        <Text style={s.heroTitle}>Leave it to us</Text>
+        <Text style={s.heroSub}>
+          No profile to read, no photos to judge, nothing to choose. We pair you
+          with someone, pick the place, and book the table.
+        </Text>
+      </View>
+
+      <View style={s.promiseCard}>
+        <Assurance icon="eye-off-outline" text="You won't see who it is until you're there" />
+        <Assurance icon="restaurant-outline" text="We choose the venue and the time" />
+        <Assurance icon="shield-checkmark-outline" text="Everyone is ID-verified before they can join" />
+        <Assurance icon="calendar-outline" text="You'll get the details in your Dates tab" />
+      </View>
+
+      {pool?.enough && (
+        <Text style={s.poolLine}>{pool.bucket} people are in the pool right now</Text>
+      )}
+
+      {windowOpen ? (
+        <TouchableOpacity
+          style={[s.primaryBtn, busy && { opacity: 0.7 }]}
+          onPress={onJoin}
+          disabled={busy}
+          activeOpacity={0.88}
+        >
+          {busy ? <ActivityIndicator color="#fff" /> : (
+            <>
+              <Ionicons name="sparkles" size={18} color="#fff" />
+              <Text style={s.primaryText}>Join tonight's pool</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      ) : (
+        <WindowClosedNotice secondsUntilOpen={secondsUntilOpen} />
+      )}
+
+      <Text style={s.smallPrint}>
+        Joining means you're genuinely willing to go. You can leave the pool any
+        time before we match you.
+      </Text>
+    </ScrollView>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Waiting({ pool, busy, onLeave }: {
+  pool: { bucket: string; enough: boolean } | null; busy: boolean; onLeave: () => void;
+}) {
   return (
-    <View style={s.summaryRow}>
-      <Text style={s.summaryLabel}>{label}</Text>
-      <Text style={s.summaryValue}>{value}</Text>
+    <ScrollView contentContainerStyle={s.body}>
+      <View style={s.hero}>
+        <Text style={s.emoji}>🔎</Text>
+        <Text style={s.heroTitle}>You're in</Text>
+        <Text style={s.heroSub}>
+          We're looking for the right person. When we find them, we'll plan the
+          whole evening and it'll appear in your Dates tab.
+        </Text>
+      </View>
+
+      <View style={s.statusCard}>
+        <View style={s.liveDot} />
+        <Text style={s.statusText}>
+          {pool?.enough
+            ? `In the pool with ${pool.bucket} others`
+            : 'In the pool — we\'ll be in touch'}
+        </Text>
+      </View>
+
+      <Text style={s.smallPrint}>
+        Matching runs during each evening window. Most people wait a night or
+        two, sometimes a little longer while the pool builds.
+      </Text>
+
+      <TouchableOpacity style={s.leaveBtn} onPress={onLeave} disabled={busy}>
+        <Text style={s.leaveText}>Leave the pool</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+}
+
+function Matched({ onDates }: { onDates: () => void }) {
+  return (
+    <ScrollView contentContainerStyle={s.body}>
+      <View style={s.hero}>
+        <Text style={s.emoji}>🎉</Text>
+        <Text style={s.heroTitle}>We found someone</Text>
+        <Text style={s.heroSub}>
+          We're picking the venue and the time now. The details land in your
+          Dates tab as soon as it's booked.
+        </Text>
+      </View>
+
+      <TouchableOpacity style={s.primaryBtn} onPress={onDates} activeOpacity={0.88}>
+        <Text style={s.primaryText}>See my dates</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+}
+
+function Assurance({ icon, text }: { icon: any; text: string }) {
+  return (
+    <View style={s.promiseRow}>
+      <View style={s.promiseIcon}>
+        <Ionicons name={icon} size={15} color={COLORS.BRAND} />
+      </View>
+      <Text style={s.promiseText}>{text}</Text>
     </View>
   );
 }
@@ -293,62 +238,49 @@ const s = StyleSheet.create({
   },
   backBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   title: { fontSize: 18, fontWeight: '800', color: COLORS.TEXT },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 8 },
-  body: { padding: 20, paddingBottom: 40 },
-  intro: { fontSize: 14, color: COLORS.TEXT_SECONDARY, lineHeight: 21, marginBottom: 22 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 15, fontWeight: '800', color: COLORS.TEXT, marginBottom: 4 },
-  sectionHint: { fontSize: 12, color: COLORS.TEXT_MUTED, marginBottom: 10 },
-  row: { flexDirection: 'row', gap: 10 },
+  body: { padding: 24, paddingBottom: 44 },
+  hero: { alignItems: 'center', gap: 10, marginBottom: 26 },
+  emoji: { fontSize: 54 },
+  heroTitle: { fontSize: 26, fontWeight: '900', color: COLORS.TEXT, letterSpacing: -0.6 },
+  heroSub: { fontSize: 14, color: COLORS.TEXT_SECONDARY, textAlign: 'center', lineHeight: 21 },
 
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
-  chip: {
-    paddingHorizontal: 13, paddingVertical: 9, borderRadius: 14,
-    backgroundColor: COLORS.SURFACE, borderWidth: 1.5, borderColor: COLORS.BORDER_LIGHT,
+  promiseCard: {
+    backgroundColor: COLORS.SURFACE, borderRadius: 20, padding: 18, gap: 15, marginBottom: 20,
+    shadowColor: '#1A0F26', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06,
+    shadowRadius: 12, elevation: 3,
   },
-  chipOn: { backgroundColor: COLORS.BRAND_MUTED, borderColor: COLORS.BRAND },
-  chipText: { fontSize: 13, fontWeight: '700', color: COLORS.TEXT_SECONDARY },
-  chipTextOn: { color: COLORS.BRAND },
-
-  budgetRow: { flexDirection: 'row', gap: 8, marginTop: 6 },
-  budgetCard: {
-    flex: 1, padding: 12, borderRadius: 14, alignItems: 'center', gap: 4,
-    backgroundColor: COLORS.SURFACE, borderWidth: 1.5, borderColor: COLORS.BORDER_LIGHT,
+  promiseRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  promiseIcon: {
+    width: 30, height: 30, borderRadius: 10, backgroundColor: COLORS.BRAND_MUTED,
+    justifyContent: 'center', alignItems: 'center',
   },
-  budgetCardOn: { borderColor: COLORS.BRAND, backgroundColor: COLORS.BRAND_MUTED },
-  budgetLabel: { fontSize: 17, fontWeight: '900', color: COLORS.TEXT },
-  budgetHint: { fontSize: 10, color: COLORS.TEXT_MUTED, textAlign: 'center', lineHeight: 13 },
+  promiseText: { flex: 1, fontSize: 13.5, color: COLORS.TEXT, lineHeight: 19 },
 
-  input: {
-    backgroundColor: COLORS.SURFACE, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13,
-    borderWidth: 1.5, borderColor: COLORS.BORDER, fontSize: 14, color: COLORS.TEXT,
+  poolLine: {
+    textAlign: 'center', fontSize: 12, color: COLORS.TEXT_MUTED,
+    fontWeight: '700', marginBottom: 16,
   },
-
-  commitCard: {
-    flexDirection: 'row', gap: 10, alignItems: 'flex-start',
-    backgroundColor: COLORS.BRAND_MUTED, borderRadius: 16, padding: 14, marginBottom: 18,
-  },
-  commitText: { flex: 1, fontSize: 12, color: COLORS.TEXT_SECONDARY, lineHeight: 17 },
 
   primaryBtn: {
-    backgroundColor: COLORS.BRAND, borderRadius: 16, paddingVertical: 16,
-    alignItems: 'center', marginTop: 8,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: COLORS.BRAND, borderRadius: 16, paddingVertical: 17,
   },
-  primaryText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  primaryText: { fontSize: 15.5, fontWeight: '800', color: '#fff' },
 
-  waitingHero: { alignItems: 'center', paddingVertical: 20, gap: 8 },
-  waitingEmoji: { fontSize: 48 },
-  waitingTitle: { fontSize: 22, fontWeight: '900', color: COLORS.TEXT },
-  waitingSub: { fontSize: 14, color: COLORS.TEXT_SECONDARY, lineHeight: 21, textAlign: 'center' },
-
-  summaryCard: {
-    backgroundColor: COLORS.SURFACE, borderRadius: 18, padding: 16, marginTop: 20, gap: 12,
+  statusCard: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9,
+    backgroundColor: COLORS.LIKE_BG, borderRadius: 16, paddingVertical: 15, marginBottom: 18,
   },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
-  summaryLabel: { fontSize: 12, fontWeight: '800', color: COLORS.TEXT_MUTED, textTransform: 'uppercase', letterSpacing: 0.5 },
-  summaryValue: { flex: 1, fontSize: 13, color: COLORS.TEXT, textAlign: 'right' },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.LIKE },
+  statusText: { fontSize: 13.5, fontWeight: '800', color: COLORS.LIKE },
 
-  leaveBtn: { paddingVertical: 16, alignItems: 'center', marginTop: 18 },
-  leaveText: { fontSize: 14, fontWeight: '700', color: COLORS.TEXT_MUTED, textDecorationLine: 'underline' },
+  smallPrint: {
+    fontSize: 12, color: COLORS.TEXT_MUTED, textAlign: 'center',
+    lineHeight: 18, marginTop: 16, paddingHorizontal: 8,
+  },
+
+  leaveBtn: { paddingVertical: 16, alignItems: 'center', marginTop: 10 },
+  leaveText: { fontSize: 14, fontWeight: '700', color: COLORS.TEXT_MUTED },
 });

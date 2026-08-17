@@ -24,8 +24,8 @@ interface Signup {
   areas: string[];
   date_styles: string[];
   budget: string;
-  available_from: string;
-  available_to: string;
+  available_from: string | null;
+  available_to: string | null;
   time_bands: string[];
   created_at: string;
 }
@@ -103,22 +103,35 @@ Deno.serve(async (req: Request) => {
         const pb = byId.get(b.user_id);
         if (!compatible(pa, pb)) continue;
 
-        // Hard: the two windows must actually overlap, and so must the times
+        // Availability is only a constraint when both sides actually stated
+        // one. Since 0014 the app stops asking, so most signups carry the
+        // default fortnight and this is a no-op.
         if (!datesOverlap(a, b)) continue;
-        const bands = overlap(a.time_bands, b.time_bands);
-        if (bands.length === 0) continue;
 
-        // Soft: rank on how much else they share
+        // Everything below is preference, and preference is now a tiebreak
+        // rather than a gate. Requiring an area match was disqualifying most
+        // viable pairs: in a pool this size the odds of two people picking
+        // the same corner of London are poor, and the concierge can pick a
+        // venue between two areas anyway. Better a date slightly across town
+        // than no date at all.
         const areas = overlap(a.areas, b.areas);
+        const bands = overlap(a.time_bands, b.time_bands);
         const styles = overlap(a.date_styles, b.date_styles);
         const budgetGap = Math.abs(
           (BUDGET_RANK[a.budget] ?? 1) - (BUDGET_RANK[b.budget] ?? 1),
         );
-        const score =
-          areas.length * 10 + bands.length * 8 + styles.length * 5 - budgetGap * 6;
 
-        // An area mismatch is disqualifying — nobody wants to cross London
-        if (areas.length === 0) continue;
+        // Waiting longer beats sharing a postcode. Without this the oldest
+        // signups lose every round to whoever happens to match on tags, and
+        // somebody sits in the pool indefinitely.
+        const waitedHours = Math.min(
+          72,
+          (Date.now() - new Date(b.created_at).getTime()) / 3600000,
+        );
+
+        const score =
+          areas.length * 10 + bands.length * 8 + styles.length * 5
+          - budgetGap * 6 + waitedHours;
 
         if (!best || score > best.score) best = { s: b, score };
       }
@@ -177,7 +190,10 @@ function overlap(a: string[] = [], b: string[] = []): string[] {
   return (a ?? []).filter((x) => set.has(x));
 }
 
+/** Null means "whenever" -- 0014 made both columns optional. */
 function datesOverlap(a: Signup, b: Signup): boolean {
+  if (!a.available_from || !a.available_to) return true;
+  if (!b.available_from || !b.available_to) return true;
   return a.available_from <= b.available_to && b.available_from <= a.available_to;
 }
 

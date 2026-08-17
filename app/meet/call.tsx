@@ -17,6 +17,7 @@ import {
   expireStaleCalls, secondsRemaining, formatRemaining,
   type CallState,
 } from '@/lib/calls-supabase';
+import { WindowClosedNotice, useDailyWindow } from '@/components/WindowCountdown';
 
 type Phase = 'intro' | 'waiting' | 'connecting' | 'live' | 'outcome' | 'done';
 
@@ -37,6 +38,7 @@ const POLL_MS = 4000;
 export default function CallScreen() {
   const router = useRouter();
 
+  const w = useDailyWindow();
   const [phase, setPhase] = useState<Phase>('intro');
   const [queueSize, setQueueSize] = useState(0);
   const [call, setCall] = useState<CallState | null>(null);
@@ -77,6 +79,13 @@ export default function CallScreen() {
   /* ─── waiting: poll for a partner ─── */
   useEffect(() => {
     if (phase !== 'waiting') return;
+    // The window closing mid-wait ends the wait: nobody new can join the
+    // queue after 21:00, so continuing to poll is just battery.
+    if (!w.open) {
+      leaveCallQueue().catch(() => {});
+      setPhase('intro');
+      return;
+    }
     let cancelled = false;
 
     const tick = async () => {
@@ -98,7 +107,7 @@ export default function CallScreen() {
     tick();
     return () => { cancelled = true; clearInterval(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  }, [phase, w.open]);
 
   /* ─── live: the shared countdown ─── */
   useEffect(() => {
@@ -194,7 +203,7 @@ export default function CallScreen() {
 
   /* ─── actions ─── */
   const join = async () => {
-    if (!callTransportAvailable) return;
+    if (!callTransportAvailable || !w.open) return;
     setBusy(true);
     try {
       const { callId } = await joinCallQueue('audio');
@@ -273,6 +282,8 @@ export default function CallScreen() {
       {phase === 'intro' && (
         <Intro
           available={callTransportAvailable}
+          windowOpen={w.open}
+          secondsUntilOpen={w.secondsUntilOpen}
           queueSize={queueSize}
           busy={busy}
           onJoin={join}
@@ -321,8 +332,11 @@ export default function CallScreen() {
 
 /* ─── states ─── */
 
-function Intro({ available, queueSize, busy, onJoin, onBlind }: {
-  available: boolean; queueSize: number; busy: boolean;
+function Intro({
+  available, windowOpen, secondsUntilOpen, queueSize, busy, onJoin, onBlind,
+}: {
+  available: boolean; windowOpen: boolean; secondsUntilOpen: number;
+  queueSize: number; busy: boolean;
   onJoin: () => void; onBlind: () => void;
 }) {
   return (
@@ -352,7 +366,9 @@ function Intro({ available, queueSize, busy, onJoin, onBlind }: {
         </Text>
       </View>
 
-      {available ? (
+      {available && !windowOpen ? (
+        <WindowClosedNotice secondsUntilOpen={secondsUntilOpen} />
+      ) : available ? (
         <>
           <TouchableOpacity
             style={[s.primaryBtn, busy && { opacity: 0.7 }]}
