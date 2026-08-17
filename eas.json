@@ -54,7 +54,8 @@
     "production": {
       "ios": {
         "appleId": "azpiazujavier@gmail.com",
-        "appleTeamId": "HQ8AK8XS67"
+        "appleTeamId": "HQ8AK8XS67",
+        "ascAppId": "6787748434"
       },
       "android": {
         "serviceAccountKeyPath": "./google-play-service-account.json",
