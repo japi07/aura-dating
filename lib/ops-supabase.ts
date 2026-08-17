@@ -28,6 +28,10 @@ export interface PlanningDate {
   timeBands: string[];
   dietary?: string;
   accessibility?: string;
+  /** Instants BOTH people said they are free. Book inside these. */
+  agreedSlots: string[];
+  aSubmitted: boolean;
+  bSubmitted: boolean;
 }
 
 /** Whether the signed-in user is an ops admin. False on any error. */
@@ -72,6 +76,9 @@ export async function fetchPlanningQueue(): Promise<PlanningDate[]> {
     timeBands: Array.from(new Set(r.time_bands ?? [])) as string[],
     dietary: r.dietary ?? undefined,
     accessibility: r.accessibility ?? undefined,
+    agreedSlots: r.agreed_slots ?? [],
+    aSubmitted: !!r.a_submitted,
+    bSubmitted: !!r.b_submitted,
   }));
 }
 

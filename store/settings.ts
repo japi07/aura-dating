@@ -4,6 +4,7 @@
  */
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { pushDatePreferences, fetchDatePreferences } from '@/lib/preferences-supabase';
 
 const KEY = 'aura.settings.v1';
 
@@ -129,6 +130,38 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     } catch {
       set({ isHydrated: true });
     }
+
+    // Reconcile with the profile, which is what actually drives matching.
+    // The server wins where it has an answer, so a reinstall or a second
+    // device does not silently fall back to the defaults and start matching
+    // on preferences the member never chose.
+    try {
+      const remote = await fetchDatePreferences();
+      if (remote && Object.keys(remote).length > 0) {
+        const merged = { ...get().dates, ...remote };
+        set({ dates: merged });
+        await persist({
+          notifications: get().notifications,
+          privacy: get().privacy,
+          dates: merged,
+          safety: get().safety,
+        });
+      } else {
+        // First run against the new columns: seed the profile from whatever
+        // is already on the phone rather than leaving the matcher blind.
+        const d = get().dates;
+        void pushDatePreferences({
+          dateTypes: d.dateTypes,
+          availableDays: d.availableDays,
+          ageMin: d.ageMin,
+          ageMax: d.ageMax,
+          radiusKm: d.radiusKm,
+          intention: d.intention,
+        });
+      }
+    } catch {
+      // Offline. The cached copy is already in state.
+    }
   },
 
   updateNotifications: async (patch) => {
@@ -147,6 +180,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const next = { ...get().dates, ...patch };
     set({ dates: next });
     await persist({ notifications: get().notifications, privacy: get().privacy, dates: next, safety: get().safety });
+
+    // The blind matcher runs on the server and cannot read AsyncStorage, so
+    // these have to reach the profile or the Preferences screen is decoration.
+    // Not awaited: a toggle should never wait on the network, and the next
+    // change carries the whole set again anyway.
+    void pushDatePreferences({
+      dateTypes: next.dateTypes,
+      availableDays: next.availableDays,
+      ageMin: next.ageMin,
+      ageMax: next.ageMax,
+      radiusKm: next.radiusKm,
+      intention: next.intention,
+    });
   },
 
   blockUser: async (id) => {

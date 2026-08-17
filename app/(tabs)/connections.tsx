@@ -7,6 +7,8 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
+import { DateRoadmap } from '@/components/DateRoadmap';
+import { buildRoadmap, fetchDatePlanState } from '@/lib/date-plan-supabase';
 import { useDatesStore, type ConfirmedDate, type DateInterest } from '@/store/dates';
 import { openInMaps } from '@/lib/maps';
 import { addDateToCalendar } from '@/lib/calendar';
@@ -20,11 +22,42 @@ export default function DatesScreen() {
   const router = useRouter();
   const { dates, hydrate, upcoming, past, cancelDate, rateDate, setDateInterest } = useDatesStore();
   const [tab, setTab] = useState<Tab>('Upcoming');
+  // Whether each side has posted their availability, keyed by date id. The
+  // roadmap is a lie without this — someone who already sent their times
+  // would keep being told to send them.
+  const [plans, setPlans] = useState<Record<string, { mine: boolean; theirs: boolean }>>({});
 
   useEffect(() => { hydrate(); }, []);
 
   const upcomingList = upcoming();
   const pastList = past();
+
+  // Only dates without a time need this, which is a small set, so one call
+  // each is cheaper than another aggregate endpoint.
+  const planningIds = upcomingList
+    .filter((d) => d.status === 'planning' || !d.startsAt)
+    .map((d) => d.id)
+    .join(',');
+
+  useEffect(() => {
+    if (!planningIds) return;
+    let cancelled = false;
+    (async () => {
+      const ids = planningIds.split(',');
+      const entries = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const st = await fetchDatePlanState(id);
+            return [id, { mine: !!st?.iSubmitted, theirs: !!st?.theySubmitted }] as const;
+          } catch {
+            return [id, { mine: false, theirs: false }] as const;
+          }
+        }),
+      );
+      if (!cancelled) setPlans(Object.fromEntries(entries));
+    })();
+    return () => { cancelled = true; };
+  }, [planningIds]);
 
   const handleDirections = async (d: ConfirmedDate) => {
     const ok = await openInMaps({
@@ -197,6 +230,41 @@ export default function DatesScreen() {
                         <Text style={styles.planRowText}>{paymentLabel(d.payment)}</Text>
                       </View>
                     </View>
+
+                    {/* While there is no time yet, the card is about progress
+                        rather than logistics: a venue row that says "to be
+                        confirmed" three times over tells nobody anything. */}
+                    {planning && (
+                      <View style={styles.roadmapBox}>
+                        <DateRoadmap
+                          compact
+                          stages={buildRoadmap({
+                            mode: d.mode,
+                            status: d.status,
+                            iSubmitted: !!plans[d.id]?.mine,
+                            theySubmitted: !!plans[d.id]?.theirs,
+                            hasTime: !!d.startsAt,
+                            followUpDue: false,
+                          })}
+                        />
+                        <TouchableOpacity
+                          style={[styles.planCta, plans[d.id]?.mine && styles.planCtaDone]}
+                          onPress={() => router.push(`/date/${d.id}`)}
+                          activeOpacity={0.85}
+                        >
+                          <Ionicons
+                            name={plans[d.id]?.mine ? 'checkmark-circle-outline' : 'time-outline'}
+                            size={16}
+                            color={plans[d.id]?.mine ? COLORS.BRAND : '#fff'}
+                          />
+                          <Text
+                            style={[styles.planCtaText, plans[d.id]?.mine && { color: COLORS.BRAND }]}
+                          >
+                            {plans[d.id]?.mine ? 'Times sent — view or change' : 'Add when you are free'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
 
                     <View style={styles.actionRow}>
                       <TouchableOpacity style={styles.smallBtn} onPress={() => handleDirections(d)}>
@@ -429,6 +497,17 @@ const styles = StyleSheet.create({
   planRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 5 },
   planRowText: { fontSize: 13, color: COLORS.TEXT_SECONDARY, fontWeight: '500' },
 
+  roadmapBox: {
+    backgroundColor: COLORS.BG, borderRadius: 16, padding: 14, marginTop: 12, gap: 4,
+  },
+  planCta: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+    backgroundColor: COLORS.BRAND, borderRadius: 13, paddingVertical: 12, marginTop: 8,
+  },
+  planCtaDone: {
+    backgroundColor: COLORS.BRAND_MUTED, borderWidth: 1.5, borderColor: COLORS.BRAND_GLOW,
+  },
+  planCtaText: { fontSize: 13.5, fontWeight: '800', color: '#fff' },
   actionRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   smallBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,

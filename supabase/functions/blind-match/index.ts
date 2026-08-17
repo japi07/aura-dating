@@ -36,6 +36,13 @@ interface Profile {
   gender_interest: string | null;
   age: number | null;
   verification_status: string | null;
+  // From the Preferences screen, synced to the profile in 0015. Before that
+  // these lived only in AsyncStorage and this function could not see them.
+  date_types: string[] | null;
+  available_days: string[] | null;
+  age_min: number | null;
+  age_max: number | null;
+  intention: string | null;
 }
 
 const BUDGET_RANK: Record<string, number> = { low: 0, mid: 1, high: 2 };
@@ -70,7 +77,7 @@ Deno.serve(async (req: Request) => {
     const userIds = signups.map((s: Signup) => s.user_id);
     const { data: profiles } = await admin
       .from('profiles')
-      .select('id, gender, gender_interest, age, verification_status')
+      .select('id, gender, gender_interest, age, verification_status, date_types, available_days, age_min, age_max, intention')
       .in('id', userIds);
 
     const byId = new Map<string, Profile>((profiles ?? []).map((p: Profile) => [p.id, p]));
@@ -108,15 +115,28 @@ Deno.serve(async (req: Request) => {
         // default fortnight and this is a no-op.
         if (!datesOverlap(a, b)) continue;
 
-        // Everything below is preference, and preference is now a tiebreak
-        // rather than a gate. Requiring an area match was disqualifying most
-        // viable pairs: in a pool this size the odds of two people picking
-        // the same corner of London are poor, and the concierge can pick a
-        // venue between two areas anyway. Better a date slightly across town
-        // than no date at all.
+        // Age is a gate, not a tiebreak. Someone who said 28-38 means it, and
+        // a blind date they would have rejected on sight is worse than none.
+        if (!ageAcceptable(pa, pb)) continue;
+
+        // Everything below is preference, and preference is a tiebreak rather
+        // than a gate. Requiring an area match was disqualifying most viable
+        // pairs: in a pool this size the odds of two people picking the same
+        // corner of London are poor, and the concierge can pick a venue
+        // between two areas anyway. Better a date slightly across town than
+        // no date at all.
         const areas = overlap(a.areas, b.areas);
         const bands = overlap(a.time_bands, b.time_bands);
         const styles = overlap(a.date_styles, b.date_styles);
+
+        // The real signal now comes from the Preferences screen rather than
+        // the retired blind signup form: the kinds of date they both like,
+        // and the days they are both around.
+        const sharedTypes = overlap(pa?.date_types ?? [], pb?.date_types ?? []);
+        const sharedDays = overlap(pa?.available_days ?? [], pb?.available_days ?? []);
+        const sameIntention =
+          !!pa?.intention && pa.intention === pb?.intention ? 1 : 0;
+
         const budgetGap = Math.abs(
           (BUDGET_RANK[a.budget] ?? 1) - (BUDGET_RANK[b.budget] ?? 1),
         );
@@ -130,6 +150,9 @@ Deno.serve(async (req: Request) => {
         );
 
         const score =
+          sharedTypes.length * 12 +   // what they both actually want to do
+          sharedDays.length * 9 +     // and when they are both free
+          sameIntention * 15 +        // looking for the same thing matters most
           areas.length * 10 + bands.length * 8 + styles.length * 5
           - budgetGap * 6 + waitedHours;
 
@@ -195,6 +218,22 @@ function datesOverlap(a: Signup, b: Signup): boolean {
   if (!a.available_from || !a.available_to) return true;
   if (!b.available_from || !b.available_to) return true;
   return a.available_from <= b.available_to && b.available_from <= a.available_to;
+}
+
+/**
+ * Each person inside the range the other asked for. A missing range means no
+ * preference; a missing age cannot be checked, so it passes rather than
+ * silently excluding everyone who has not filled their profile in.
+ */
+function ageAcceptable(a?: Profile, b?: Profile): boolean {
+  if (!a || !b) return false;
+  const within = (person: Profile, other: Profile) => {
+    if (other.age == null) return true;
+    if (person.age_min != null && other.age < person.age_min) return false;
+    if (person.age_max != null && other.age > person.age_max) return false;
+    return true;
+  };
+  return within(a, b) && within(b, a);
 }
 
 /**

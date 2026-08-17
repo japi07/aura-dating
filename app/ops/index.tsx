@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
+import { formatDate, formatTime } from '@/lib/format';
 import { LONDON_VENUES } from '@/constants/london';
 import { DateField } from '@/components/DateField';
 import { TimeField } from '@/components/TimeField';
@@ -163,6 +164,19 @@ export default function OpsScreen() {
                 )}
                 {!!d.dietary && <Constraint icon="restaurant-outline" text={d.dietary} warn />}
                 {!!d.accessibility && <Constraint icon="accessibility-outline" text={d.accessibility} warn />}
+                <Constraint
+                  icon="people-outline"
+                  text={
+                    d.agreedSlots.length > 0
+                      ? `${d.agreedSlots.length} time${d.agreedSlots.length > 1 ? 's' : ''} they both have free`
+                      : d.aSubmitted && d.bSubmitted
+                        ? 'Both answered, but no overlap'
+                        : d.aSubmitted || d.bSubmitted
+                          ? 'Only one has sent their times'
+                          : 'Neither has sent their times yet'
+                  }
+                  warn={d.aSubmitted && d.bSubmitted && d.agreedSlots.length === 0}
+                />
               </View>
 
               <View style={s.planCta}>
@@ -249,6 +263,32 @@ function PlanSheet({ date, onClose, onDone }: {
                 {date.timeBands.join(', ') || 'any time'} · budget {date.budget ?? 'mid'}
                 {date.dietary ? ` · ${date.dietary}` : ''}
               </Text>
+
+              {date.agreedSlots.length > 0 && (
+                <>
+                  <Text style={s.fieldLabel}>Times they both said they are free</Text>
+                  <View style={s.slotWrap}>
+                    {date.agreedSlots.slice(0, 8).map((iso) => {
+                      const d = new Date(iso);
+                      const pad = (n: number) => String(n).padStart(2, '0');
+                      const dayISO = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+                      const hhmm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                      const on = day === dayISO && time === hhmm;
+                      return (
+                        <TouchableOpacity
+                          key={iso}
+                          style={[s.slotChip, on && s.slotChipOn]}
+                          onPress={() => { setDay(dayISO); setTime(hhmm); }}
+                        >
+                          <Text style={[s.slotChipText, on && { color: '#fff' }]}>
+                            {formatDate(iso)} · {formatTime(iso)}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
 
               {suggestions.length > 0 && (
                 <>
@@ -401,6 +441,14 @@ const s = StyleSheet.create({
   suggestName: { fontSize: 12, fontWeight: '800', color: COLORS.TEXT, lineHeight: 16 },
   suggestMeta: { fontSize: 10, color: COLORS.TEXT_MUTED, fontWeight: '600' },
 
+  slotWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  slotChip: {
+    backgroundColor: COLORS.LIKE_BG, borderRadius: 11,
+    paddingHorizontal: 11, paddingVertical: 8,
+    borderWidth: 1.5, borderColor: 'transparent',
+  },
+  slotChipOn: { backgroundColor: COLORS.BRAND, borderColor: COLORS.BRAND },
+  slotChipText: { fontSize: 12, fontWeight: '700', color: COLORS.LIKE },
   input: {
     backgroundColor: COLORS.BG, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13,
     borderWidth: 1.5, borderColor: COLORS.BORDER, fontSize: 14, color: COLORS.TEXT, marginBottom: 10,
