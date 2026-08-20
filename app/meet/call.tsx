@@ -40,7 +40,7 @@ export default function CallScreen() {
   const router = useRouter();
 
   const w = useDailyWindow();
-  const { hasEntry, markUsed } = useTokensStore();
+  const { hasEntry, hasTicket, markUsed, giveBack } = useTokensStore();
   const [phase, setPhase] = useState<Phase>('intro');
   const [queueSize, setQueueSize] = useState(0);
   const [call, setCall] = useState<CallState | null>(null);
@@ -85,6 +85,7 @@ export default function CallScreen() {
     // queue after 21:00, so continuing to poll is just battery.
     if (!w.open) {
       leaveCallQueue().catch(() => {});
+      void refundIfUnspent();
       setPhase('intro');
       return;
     }
@@ -140,6 +141,8 @@ export default function CallScreen() {
       s.on('joined', () => {
         setPhase('live');
         markCallStarted(state.id);
+        // Connected. This is the point of no return, so the ticket goes now.
+        void markUsed('call');
       });
       s.on('participant-joined', () => setPartnerHere(true));
       s.on('participant-left', () => setPartnerHere(false));
@@ -206,8 +209,9 @@ export default function CallScreen() {
   /* ─── actions ─── */
   const join = async () => {
     if (!callTransportAvailable || !w.open || !hasEntry('call')) return;
-    // Your place is spent the moment you enter the queue.
-    void markUsed('call');
+    // The ticket is NOT spent here. Queueing is not the thing you paid for --
+    // a queue that finds nobody, or that you leave, has to be refundable. It
+    // is claimed when a call actually connects.
     setBusy(true);
     try {
       const { callId } = await joinCallQueue('audio');
@@ -223,8 +227,20 @@ export default function CallScreen() {
     }
   };
 
+  /**
+   * Hand the ticket back if it is still unspent.
+   *
+   * Safe to call on every abandon path: a ticket already claimed by a
+   * connected call refuses the refund server-side, so this cannot pay
+   * anyone twice.
+   */
+  const refundIfUnspent = async () => {
+    try { await giveBack('call'); } catch { /* it will be swept tonight */ }
+  };
+
   const cancelWaiting = async () => {
     await leaveCallQueue();
+    await refundIfUnspent();
     setPhase('intro');
   };
 
@@ -286,7 +302,7 @@ export default function CallScreen() {
       {phase === 'intro' && (
         <Intro
           available={callTransportAvailable}
-          paid={hasEntry('call')}
+          paid={hasTicket('call')}
           onPay={() => router.push('/pay/call')}
           windowOpen={w.open}
           secondsUntilOpen={w.secondsUntilOpen}

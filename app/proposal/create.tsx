@@ -56,26 +56,33 @@ export default function CreateProposalScreen() {
 
   // Safety net: the entry points are already hidden for non-proposers, but
   // guard the screen itself so it can't be reached by a stale deep link.
-  if (user && !canSendProposals(user)) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
-        <Ionicons name="mail-open-outline" size={44} color={COLORS.BRAND} />
-        <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.TEXT, marginTop: 16, textAlign: 'center' }}>
-          Proposals come to you
-        </Text>
-        <Text style={{ fontSize: 14, color: COLORS.TEXT_MUTED, marginTop: 8, textAlign: 'center', lineHeight: 20 }}>
-          On Aura you receive curated date proposals rather than sending them.
-          They'll appear under Proposals on your Meet tab.
-        </Text>
-        <TouchableOpacity
-          style={{ marginTop: 22, paddingHorizontal: 22, paddingVertical: 13, borderRadius: 14, backgroundColor: COLORS.BRAND }}
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
-        >
-          <Text style={{ color: '#fff', fontWeight: '800' }}>Back</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+  //
+  // Computed here, rendered at the bottom. It used to return early from
+  // this spot, which left roughly a dozen hooks -- including useVideoPlayer,
+  // which allocates a native player -- declared below a conditional return.
+  // React requires the same hooks in the same order every render, so the
+  // screen would tear down badly if the condition ever flipped while it was
+  // mounted.
+  const notAProposer = !!user && !canSendProposals(user);
+
+  const blockedView = (
+    <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
+      <Ionicons name="mail-open-outline" size={44} color={COLORS.BRAND} />
+      <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.TEXT, marginTop: 16, textAlign: 'center' }}>
+        Proposals come to you
+      </Text>
+      <Text style={{ fontSize: 14, color: COLORS.TEXT_MUTED, marginTop: 8, textAlign: 'center', lineHeight: 20 }}>
+        On Aura you receive curated date proposals rather than sending them.
+        They'll appear under Proposals on your Meet tab.
+      </Text>
+      <TouchableOpacity
+        style={{ marginTop: 22, paddingHorizontal: 22, paddingVertical: 13, borderRadius: 14, backgroundColor: COLORS.BRAND }}
+        onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+      >
+        <Text style={{ color: '#fff', fontWeight: '800' }}>Back</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   // Refresh on open so newly-joined members are immediately proposable
   useEffect(() => {
@@ -338,6 +345,8 @@ export default function CreateProposalScreen() {
       setLoading(false);
     }
   };
+
+  if (notAProposer) return blockedView;
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>

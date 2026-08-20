@@ -194,6 +194,17 @@ Deno.serve(async (req: Request) => {
         .eq('status', 'waiting'); // guard against a concurrent run
       if (uErr) continue;
 
+      // Claim both tickets. Joining the pool only *requires* a queued ticket
+      // so that leaving is refundable for the whole wait; being paired is the
+      // point that entitlement is actually spent. Without this a matched
+      // member could still refund and get the date for nothing.
+      await admin
+        .from('window_entries')
+        .update({ status: 'used', used_at: new Date().toISOString() })
+        .in('user_id', [a.user_id, b.user_id])
+        .eq('mode', 'blind')
+        .eq('status', 'queued');
+
       created++;
     }
 

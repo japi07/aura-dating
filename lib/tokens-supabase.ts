@@ -118,11 +118,17 @@ export async function purchaseEntry(mode: DateMode): Promise<PurchaseResult> {
   return data as PurchaseResult;
 }
 
-/** Give the ticket back — leaving the blind pool, or a call queue that found nobody. */
-export async function refundEntry(entryId: string): Promise<number> {
+/**
+ * Give the ticket back — leaving the blind pool, or a call queue that found
+ * nobody. Reports whether a token actually moved: a ticket already spent
+ * refuses politely rather than erroring, and the caller must not tell
+ * someone their token is back when it is not.
+ */
+export async function refundEntry(entryId: string): Promise<{ refunded: boolean; balance: number }> {
   const { data, error } = await getSupabase().rpc('refund_window_entry', { p_entry_id: entryId });
   if (error) throw error;
-  return (data as number | null) ?? 0;
+  const d = (data ?? {}) as any;
+  return { refunded: !!d.refunded, balance: d.balance ?? 0 };
 }
 
 /** Mark tonight's ticket as spent, once the thing has actually happened. */
@@ -159,6 +165,7 @@ export function describeReason(reason: string): string {
   if (reason.startsWith('spend_')) {
     return MODE_LABEL[reason.slice(6) as DateMode] ?? 'Entry';
   }
+  if (reason === 'refund_unused') return 'Unused — refunded';
   if (reason.startsWith('refund_')) {
     return `Refund — ${MODE_LABEL[reason.slice(7) as DateMode] ?? 'entry'}`;
   }

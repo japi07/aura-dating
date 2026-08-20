@@ -71,12 +71,12 @@ begin
   ---------------------------------------------------------------- refund
   select id into v_eid from public.window_entries
    where user_id = v_uid and mode = 'blind' and status = 'queued' limit 1;
-  v_bal := public.refund_window_entry(v_eid);
+  v_json := public.refund_window_entry(v_eid); v_bal := (v_json->>'balance')::int;
   if v_bal = 8 then v_ok := v_ok + 1; insert into tres values (format('PASS  refund -> %s', v_bal));
   else v_fail := v_fail + 1; insert into tres values (format('FAIL  refund expected 8 got %s', v_bal)); end if;
 
-  v_bal := public.refund_window_entry(v_eid);
-  if v_bal = 8 then v_ok := v_ok + 1; insert into tres values ('PASS  double refund is a no-op');
+  v_json := public.refund_window_entry(v_eid); v_bal := (v_json->>'balance')::int;
+  if v_bal = 8 and not (v_json->>'refunded')::boolean then v_ok := v_ok + 1; insert into tres values ('PASS  double refund is a no-op and says so');
   else v_fail := v_fail + 1; insert into tres values (format('FAIL  double refund paid twice -> %s', v_bal)); end if;
 
   v_json := public.purchase_window_entry('blind');
@@ -118,8 +118,8 @@ begin
 
   select id into v_eid from public.window_entries
    where user_id = v_uid and mode = 'blind' and status = 'used' limit 1;
-  v_bal := public.refund_window_entry(v_eid);
-  if v_bal = 7 then v_ok := v_ok + 1; insert into tres values ('PASS  a used ticket cannot be refunded');
+  v_json := public.refund_window_entry(v_eid); v_bal := (v_json->>'balance')::int;
+  if v_bal = 7 and not (v_json->>'refunded')::boolean then v_ok := v_ok + 1; insert into tres values ('PASS  a used ticket cannot be refunded, and says so');
   else v_fail := v_fail + 1; insert into tres values (format('FAIL  used ticket refunded -> %s', v_bal)); end if;
 
   ---------------------------------------------------------------- token_state

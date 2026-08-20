@@ -29,7 +29,7 @@ import {
 export default function BlindScreen() {
   const router = useRouter();
   const w = useDailyWindow();
-  const { hasEntry, markUsed, giveBack } = useTokensStore();
+  const { hasEntry, hasTicket, giveBack } = useTokensStore();
 
   const [signup, setSignup] = useState<BlindSignup | null>(null);
   const [pool, setPool] = useState<{ bucket: string; enough: boolean } | null>(null);
@@ -52,9 +52,10 @@ export default function BlindScreen() {
     setBusy(true);
     try {
       setSignup(await joinBlindPool());
-      // The token went at the payment screen; this marks the ticket spent
-      // so backing out later cannot claim it back.
-      await markUsed('blind');
+      // Deliberately does NOT spend the ticket. join_blind_pool only
+      // requires it; the matcher spends it when you are actually paired.
+      // That is what keeps "leave the pool and your token comes back"
+      // true for the whole wait, which is the promise the pay screen makes.
       await load();
     } catch (e: any) {
       Alert.alert('Could not join', e?.message || 'Please try again.');
@@ -77,11 +78,24 @@ export default function BlindScreen() {
             setBusy(true);
             try {
               await leaveBlindPool(signup.id);
-              await giveBack('blind');
-              setSignup(null);
-              await load();
+            } catch (e: any) {
+              Alert.alert('Could not leave', e?.message || 'Please try again.');
+              setBusy(false);
+              return;
             }
-            catch (e: any) { Alert.alert('Could not leave', e?.message || 'Please try again.'); }
+            // You are out of the pool from here whatever happens next, so
+            // the UI says so before the money step rather than reverting
+            // to "You're in" if only the refund fails.
+            setSignup(null);
+            try {
+              await giveBack('blind');
+            } catch {
+              Alert.alert(
+                'Left the pool',
+                'We could not return your token just yet — it will come back automatically.',
+              );
+            }
+            try { await load(); } catch {}
             finally { setBusy(false); }
           },
         },
@@ -115,7 +129,7 @@ export default function BlindScreen() {
           pool={pool}
           busy={busy}
           windowOpen={w.open}
-          paid={hasEntry('blind')}
+          paid={hasTicket('blind')}
           secondsUntilOpen={w.secondsUntilOpen}
           onJoin={join}
           onPay={() => router.push('/pay/blind')}

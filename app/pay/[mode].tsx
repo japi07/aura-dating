@@ -41,6 +41,11 @@ export default function PayScreen() {
   const price = prices[mode] ?? 1;
   const already = hasEntry(mode);
   const short = balance < price;
+  // Selling a place in a window that is nearly over is taking money for
+  // something the member cannot use, and a ticket does not roll over to
+  // tomorrow.
+  const CLOSING_SOON_SECONDS = 5 * 60;
+  const tooLate = w.open && w.secondsUntilClose < CLOSING_SOON_SECONDS;
 
   useEffect(() => { if (!isHydrated) hydrate(); }, [isHydrated, hydrate]);
 
@@ -125,11 +130,11 @@ export default function PayScreen() {
               detail={`Your place is held for tonight's ${WINDOW_RANGE_LABEL} window.`}
             />
             <Step
-              icon="notifications-outline"
-              title="We tell you when it opens"
+              icon={w.open ? 'hourglass-outline' : 'notifications-outline'}
+              title={w.open ? 'Tonight is already running' : 'We tell you when it opens'}
               detail={
                 w.open
-                  ? 'The window is open now — you will go straight in.'
+                  ? `${formatShort(w.secondsUntilClose)} left before tonight closes.`
                   : `Opens at ${WINDOW_LABEL}, in ${formatShort(w.secondsUntilOpen)}.`
               }
             />
@@ -174,9 +179,9 @@ export default function PayScreen() {
             </>
           ) : (
             <TouchableOpacity
-              style={[s.primaryBtn, (paying || busy) && { opacity: 0.7 }]}
+              style={[s.primaryBtn, (paying || busy || tooLate) && { opacity: 0.7 }]}
               onPress={onPay}
-              disabled={paying || busy}
+              disabled={paying || busy || tooLate}
               activeOpacity={0.88}
             >
               {paying ? <ActivityIndicator color="#fff" /> : (
@@ -188,6 +193,13 @@ export default function PayScreen() {
                 </>
               )}
             </TouchableOpacity>
+          )}
+
+          {tooLate && (
+            <View style={s.shortNotice}>
+              <Ionicons name="time-outline" size={17} color={COLORS.GOLD_DEEP} />
+              <Text style={s.shortText}>Tonight is nearly over — come back tomorrow</Text>
+            </View>
           )}
 
           <Text style={s.smallPrint}>

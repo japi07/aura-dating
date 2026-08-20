@@ -45,7 +45,7 @@ export default function MeetScreen() {
   const [callQueue, setCallQueue] = useState(0);
   const w = useDailyWindow();
   const {
-    balance, prices, hasEntry, isHydrated: tokensReady,
+    balance, prices, hasEntry, hasTicket, isHydrated: tokensReady,
     hydrate: hydrateTokens, refresh: refreshTokens,
   } = useTokensStore();
   const [loading, setLoading] = useState(true);
@@ -97,7 +97,7 @@ export default function MeetScreen() {
   // Choosing a mode goes through the payment screen; once tonight is paid
   // for, the card is a straight way back in rather than a second charge.
   const choose = (mode: 'call' | 'blind' | 'proposal', destination: string) => {
-    if (hasEntry(mode)) router.push(destination as any);
+    if (hasTicket(mode)) router.push(destination as any);
     else router.push(`/pay/${mode}` as any);
   };
 
@@ -145,7 +145,7 @@ export default function MeetScreen() {
               status={
                 !callTransportAvailable
                   ? 'Arrives in the next app update'
-                  : hasEntry('call')
+                  : hasTicket('call')
                     ? 'Queued for tonight ✓'
                   : !w.open
                     ? `Opens at ${WINDOW_LABEL} · ${formatShort(w.secondsUntilOpen)}`
@@ -164,7 +164,7 @@ export default function MeetScreen() {
               title="Blind date"
               tagline="One tap. We find someone, pick the place, and book it."
               status={
-                hasEntry('blind') && blind?.status !== 'waiting' && blind?.status !== 'matched'
+                hasTicket('blind') && blind?.status !== 'waiting' && blind?.status !== 'matched'
                   ? 'Queued for tonight ✓'
                   : blind?.status === 'waiting'
                   ? 'You\'re in the pool — we\'re looking'
@@ -243,6 +243,10 @@ function ModeCard({
     <TouchableOpacity
       style={[styles.card, disabled && styles.cardDisabled]}
       onPress={onPress}
+      // Was styled as disabled but never actually disabled, so a build
+      // without the call SDK would happily sell a call ticket it could
+      // not honour.
+      disabled={disabled}
       activeOpacity={0.88}
     >
       <View style={styles.cardTop}>

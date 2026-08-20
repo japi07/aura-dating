@@ -19,16 +19,28 @@ interface TokensStore {
   prices: Record<DateMode, number>;
   entries: Partial<Record<DateMode, WindowEntry>>;
   isHydrated: boolean;
+  /** The last load threw — the balance below is not to be trusted */
+  loadFailed: boolean;
   busy: boolean;
 
   hydrate: () => Promise<void>;
   refresh: () => Promise<void>;
   /** Buy tonight's ticket. Throws NotEnoughTokens when the wallet is short. */
   buy: (mode: DateMode) => Promise<void>;
-  giveBack: (mode: DateMode) => Promise<void>;
+  /** Returns whether a token actually came back. */
+  giveBack: (mode: DateMode) => Promise<boolean>;
   markUsed: (mode: DateMode) => Promise<void>;
-  /** Do you already hold a ticket for tonight? */
+  /**
+   * May you START this tonight? Only a queued ticket counts.
+   *
+   * Distinct from hasTicket on purpose: treating a spent ticket as an
+   * entitlement let one token authorise unlimited calls and proposals for
+   * the night, because every "am I allowed" check asked the same question
+   * as every "show the queued badge" check.
+   */
   hasEntry: (mode: DateMode) => boolean;
+  /** Did you buy tonight, spent or not? Display only. */
+  hasTicket: (mode: DateMode) => boolean;
   priceOf: (mode: DateMode) => number;
 }
 
@@ -47,15 +59,22 @@ export const useTokensStore = create<TokensStore>((set, get) => ({
   prices: { call: 1, blind: 1, proposal: 1 },
   entries: {},
   isHydrated: false,
+  loadFailed: false,
   busy: false,
 
   hydrate: async () => {
     try {
-      // Opens the account and pays the trial grant the first time only.
+      // Opens the account, pays the trial grant the first time only, and
+      // refunds any ticket bought for a night that has since passed.
       await initTokens();
       apply(set, await fetchTokenState());
+      set({ loadFailed: false });
     } catch {
-      set({ isHydrated: true });
+      // Deliberately does NOT set isHydrated. A balance of zero because
+      // the network failed is indistinguishable from a genuinely empty
+      // wallet, and latching it would show a funded member the paywall
+      // for the rest of the session with no way to retry.
+      set({ loadFailed: true });
     }
   },
 
@@ -83,15 +102,20 @@ export const useTokensStore = create<TokensStore>((set, get) => ({
 
   giveBack: async (mode) => {
     const entry = get().entries[mode];
-    if (!entry) return;
+    if (!entry) return false;
     set({ busy: true });
     try {
-      const balance = await refundEntry(entry.id);
+      const r = await refundEntry(entry.id);
+      // Only drop the ticket when money actually moved. A spent ticket
+      // refuses politely, and deleting it anyway left the client claiming
+      // a refund the server never made.
       set((st: TokensStore) => {
+        if (!r.refunded) return { balance: r.balance } as any;
         const next = { ...st.entries };
         delete next[mode];
-        return { balance, entries: next };
+        return { balance: r.balance, entries: next };
       });
+      return r.refunded;
     } finally {
       set({ busy: false });
     }
@@ -107,7 +131,9 @@ export const useTokensStore = create<TokensStore>((set, get) => ({
     });
   },
 
-  hasEntry: (mode) => {
+  hasEntry: (mode) => get().entries[mode]?.status === 'queued',
+
+  hasTicket: (mode) => {
     const e = get().entries[mode];
     return !!e && (e.status === 'queued' || e.status === 'used');
   },
