@@ -18,6 +18,7 @@ import {
   type CallState,
 } from '@/lib/calls-supabase';
 import { WindowClosedNotice, useDailyWindow } from '@/components/WindowCountdown';
+import { useTokensStore } from '@/store/tokens';
 
 type Phase = 'intro' | 'waiting' | 'connecting' | 'live' | 'outcome' | 'done';
 
@@ -39,6 +40,7 @@ export default function CallScreen() {
   const router = useRouter();
 
   const w = useDailyWindow();
+  const { hasEntry, markUsed } = useTokensStore();
   const [phase, setPhase] = useState<Phase>('intro');
   const [queueSize, setQueueSize] = useState(0);
   const [call, setCall] = useState<CallState | null>(null);
@@ -203,7 +205,9 @@ export default function CallScreen() {
 
   /* ─── actions ─── */
   const join = async () => {
-    if (!callTransportAvailable || !w.open) return;
+    if (!callTransportAvailable || !w.open || !hasEntry('call')) return;
+    // Your place is spent the moment you enter the queue.
+    void markUsed('call');
     setBusy(true);
     try {
       const { callId } = await joinCallQueue('audio');
@@ -282,6 +286,8 @@ export default function CallScreen() {
       {phase === 'intro' && (
         <Intro
           available={callTransportAvailable}
+          paid={hasEntry('call')}
+          onPay={() => router.push('/pay/call')}
           windowOpen={w.open}
           secondsUntilOpen={w.secondsUntilOpen}
           queueSize={queueSize}
@@ -333,9 +339,10 @@ export default function CallScreen() {
 /* ─── states ─── */
 
 function Intro({
-  available, windowOpen, secondsUntilOpen, queueSize, busy, onJoin, onBlind,
+  available, paid, onPay, windowOpen, secondsUntilOpen, queueSize, busy, onJoin, onBlind,
 }: {
-  available: boolean; windowOpen: boolean; secondsUntilOpen: number;
+  available: boolean; paid: boolean; onPay: () => void;
+  windowOpen: boolean; secondsUntilOpen: number;
   queueSize: number; busy: boolean;
   onJoin: () => void; onBlind: () => void;
 }) {
@@ -366,7 +373,12 @@ function Intro({
         </Text>
       </View>
 
-      {available && !windowOpen ? (
+      {available && !paid ? (
+        <TouchableOpacity style={s.primaryBtn} onPress={onPay} activeOpacity={0.88}>
+          <Ionicons name="diamond" size={17} color="#fff" />
+          <Text style={s.primaryText}>See tonight's price</Text>
+        </TouchableOpacity>
+      ) : available && !windowOpen ? (
         <WindowClosedNotice secondsUntilOpen={secondsUntilOpen} />
       ) : available ? (
         <>

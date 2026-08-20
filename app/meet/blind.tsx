@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
 import { WindowClosedNotice, useDailyWindow } from '@/components/WindowCountdown';
+import { useTokensStore } from '@/store/tokens';
 import {
   fetchMyBlindSignup, fetchPoolSize, joinBlindPool, leaveBlindPool,
   type BlindSignup,
@@ -28,6 +29,7 @@ import {
 export default function BlindScreen() {
   const router = useRouter();
   const w = useDailyWindow();
+  const { hasEntry, markUsed, giveBack } = useTokensStore();
 
   const [signup, setSignup] = useState<BlindSignup | null>(null);
   const [pool, setPool] = useState<{ bucket: string; enough: boolean } | null>(null);
@@ -50,6 +52,9 @@ export default function BlindScreen() {
     setBusy(true);
     try {
       setSignup(await joinBlindPool());
+      // The token went at the payment screen; this marks the ticket spent
+      // so backing out later cannot claim it back.
+      await markUsed('blind');
       await load();
     } catch (e: any) {
       Alert.alert('Could not join', e?.message || 'Please try again.');
@@ -62,7 +67,7 @@ export default function BlindScreen() {
     if (!signup) return;
     Alert.alert(
       'Leave the pool?',
-      'You can join again during any evening window.',
+      'Your token comes back, and you can join again any time.',
       [
         { text: 'Stay in', style: 'cancel' },
         {
@@ -70,7 +75,12 @@ export default function BlindScreen() {
           style: 'destructive',
           onPress: async () => {
             setBusy(true);
-            try { await leaveBlindPool(signup.id); setSignup(null); await load(); }
+            try {
+              await leaveBlindPool(signup.id);
+              await giveBack('blind');
+              setSignup(null);
+              await load();
+            }
             catch (e: any) { Alert.alert('Could not leave', e?.message || 'Please try again.'); }
             finally { setBusy(false); }
           },
@@ -105,17 +115,20 @@ export default function BlindScreen() {
           pool={pool}
           busy={busy}
           windowOpen={w.open}
+          paid={hasEntry('blind')}
           secondsUntilOpen={w.secondsUntilOpen}
           onJoin={join}
+          onPay={() => router.push('/pay/blind')}
         />
       )}
     </SafeAreaView>
   );
 }
 
-function Idle({ pool, busy, windowOpen, secondsUntilOpen, onJoin }: {
+function Idle({ pool, busy, windowOpen, paid, secondsUntilOpen, onJoin, onPay }: {
   pool: { bucket: string; enough: boolean } | null;
-  busy: boolean; windowOpen: boolean; secondsUntilOpen: number; onJoin: () => void;
+  busy: boolean; windowOpen: boolean; paid: boolean; secondsUntilOpen: number;
+  onJoin: () => void; onPay: () => void;
 }) {
   return (
     <ScrollView contentContainerStyle={s.body}>
@@ -139,7 +152,12 @@ function Idle({ pool, busy, windowOpen, secondsUntilOpen, onJoin }: {
         <Text style={s.poolLine}>{pool.bucket} people are in the pool right now</Text>
       )}
 
-      {windowOpen ? (
+      {!paid ? (
+        <TouchableOpacity style={s.primaryBtn} onPress={onPay} activeOpacity={0.88}>
+          <Ionicons name="diamond" size={17} color="#fff" />
+          <Text style={s.primaryText}>See tonight's price</Text>
+        </TouchableOpacity>
+      ) : windowOpen ? (
         <TouchableOpacity
           style={[s.primaryBtn, busy && { opacity: 0.7 }]}
           onPress={onJoin}
@@ -154,7 +172,13 @@ function Idle({ pool, busy, windowOpen, secondsUntilOpen, onJoin }: {
           )}
         </TouchableOpacity>
       ) : (
-        <WindowClosedNotice secondsUntilOpen={secondsUntilOpen} />
+        <>
+          <View style={s.queuedNotice}>
+            <Ionicons name="checkmark-circle" size={17} color={COLORS.LIKE} />
+            <Text style={s.queuedText}>Your place is booked for tonight</Text>
+          </View>
+          <WindowClosedNotice secondsUntilOpen={secondsUntilOpen} />
+        </>
       )}
 
       <Text style={s.smallPrint}>
@@ -263,6 +287,11 @@ const s = StyleSheet.create({
     fontWeight: '700', marginBottom: 16,
   },
 
+  queuedNotice: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: COLORS.LIKE_BG, borderRadius: 16, paddingVertical: 14, marginBottom: 10,
+  },
+  queuedText: { fontSize: 13.5, fontWeight: '800', color: COLORS.LIKE },
   primaryBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     backgroundColor: COLORS.BRAND, borderRadius: 16, paddingVertical: 17,

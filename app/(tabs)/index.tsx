@@ -16,6 +16,7 @@ import { callTransportAvailable } from '@/lib/call-transport';
 import { fetchQueueSize } from '@/lib/calls-supabase';
 import { WindowCountdown, useDailyWindow } from '@/components/WindowCountdown';
 import { formatShort, WINDOW_LABEL } from '@/lib/daily-window';
+import { useTokensStore } from '@/store/tokens';
 
 /**
  * "Meet" — the hub where you choose how you want to meet someone.
@@ -43,6 +44,10 @@ export default function MeetScreen() {
   const [pool, setPool] = useState<{ bucket: string; enough: boolean } | null>(null);
   const [callQueue, setCallQueue] = useState(0);
   const w = useDailyWindow();
+  const {
+    balance, prices, hasEntry, isHydrated: tokensReady,
+    hydrate: hydrateTokens, refresh: refreshTokens,
+  } = useTokensStore();
   const [loading, setLoading] = useState(true);
 
   const isSender = canSendProposals(user);
@@ -66,15 +71,16 @@ export default function MeetScreen() {
   useEffect(() => {
     if (!isHydrated) hydrate(); else refreshFromServer();
     if (!proposalsHydrated) hydrateProposals(); else refreshProposals();
+    if (!tokensReady) hydrateTokens(); else refreshTokens();
     (async () => { await load(); setLoading(false); })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refreshFromServer(), refreshProposals(), load()]);
+    await Promise.all([refreshFromServer(), refreshProposals(), refreshTokens(), load()]);
     setRefreshing(false);
-  }, [load, refreshFromServer, refreshProposals]);
+  }, [load, refreshFromServer, refreshProposals, refreshTokens]);
 
   const people = myEmail
     ? candidatesFor(myEmail, { genderInterest: user?.genderInterest, myGender: user?.gender })
@@ -88,12 +94,29 @@ export default function MeetScreen() {
     (p) => p?.from?.email?.toLowerCase?.() === myEmail && !decisions[p.id],
   ).length;
 
+  // Choosing a mode goes through the payment screen; once tonight is paid
+  // for, the card is a straight way back in rather than a second charge.
+  const choose = (mode: 'call' | 'blind' | 'proposal', destination: string) => {
+    if (hasEntry(mode)) router.push(destination as any);
+    else router.push(`/pay/${mode}` as any);
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="dark-content" />
 
       <View style={styles.header}>
-        <Text style={styles.title}>Meet</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>Meet</Text>
+          <TouchableOpacity
+            style={styles.wallet}
+            onPress={() => router.push('/wallet')}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="diamond" size={13} color={COLORS.GOLD_DEEP} />
+            <Text style={styles.walletText}>{balance}</Text>
+          </TouchableOpacity>
+        </View>
         <Text style={styles.sub}>
           {w.open
             ? 'Three ways to meet someone. Choose one before the window closes.'
@@ -122,6 +145,8 @@ export default function MeetScreen() {
               status={
                 !callTransportAvailable
                   ? 'Arrives in the next app update'
+                  : hasEntry('call')
+                    ? 'Queued for tonight ✓'
                   : !w.open
                     ? `Opens at ${WINDOW_LABEL} · ${formatShort(w.secondsUntilOpen)}`
                     : callQueue > 0
@@ -130,7 +155,7 @@ export default function MeetScreen() {
               }
               statusTone={!callTransportAvailable || !w.open ? 'soon' : 'ready'}
               disabled={!callTransportAvailable}
-              onPress={() => router.push('/meet/call')}
+              onPress={() => choose('call', '/meet/call')}
             />
 
             {/* ── Mode B — Blind date ── */}
@@ -139,7 +164,9 @@ export default function MeetScreen() {
               title="Blind date"
               tagline="One tap. We find someone, pick the place, and book it."
               status={
-                blind?.status === 'waiting'
+                hasEntry('blind') && blind?.status !== 'waiting' && blind?.status !== 'matched'
+                  ? 'Queued for tonight ✓'
+                  : blind?.status === 'waiting'
                   ? 'You\'re in the pool — we\'re looking'
                   : blind?.status === 'matched'
                     ? 'Matched — see your Dates tab'
@@ -152,7 +179,7 @@ export default function MeetScreen() {
               statusTone={
                 blind?.status === 'waiting' ? 'active' : !w.open ? 'soon' : 'ready'
               }
-              onPress={() => router.push('/meet/blind')}
+              onPress={() => choose('blind', '/meet/blind')}
             />
 
             {/* ── Mode C — Curated proposal ── */}
@@ -180,7 +207,7 @@ export default function MeetScreen() {
                   : isSender && !w.open ? 'soon' : 'ready'
               }
               onPress={() =>
-                isSender ? router.push('/meet/browse') : router.push('/meet/proposals')
+                isSender ? choose('proposal', '/meet/browse') : router.push('/meet/proposals')
               }
             />
 
@@ -239,6 +266,13 @@ function ModeCard({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.BG },
   header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  wallet: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.GOLD_MUTED, borderRadius: 13,
+    paddingHorizontal: 12, paddingVertical: 7,
+  },
+  walletText: { fontSize: 13.5, fontWeight: '800', color: COLORS.GOLD_DEEP },
   title: { fontSize: 28, fontWeight: '800', color: COLORS.TEXT, letterSpacing: -0.5 },
   sub: { fontSize: 13, color: COLORS.TEXT_MUTED, marginTop: 3, lineHeight: 18 },
 
