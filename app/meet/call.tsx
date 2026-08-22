@@ -193,6 +193,15 @@ export default function CallScreen() {
     const s = session.current;
     session.current = null;
     if (s) { await s.leave(); await s.destroy(); }
+
+    // Only ask about a call that happened. A join that Daily refused still
+    // reaches here via the error handler, and asking "how was it, would you
+    // like to meet them" about a conversation nobody had is nonsense -- and
+    // it records a real answer about a stranger you never heard.
+    if (!startedRef.current) {
+      setPhase('intro');
+      return;
+    }
     setPhase('outcome');
   }, []);
 

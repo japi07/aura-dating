@@ -150,3 +150,32 @@ mode" while it is on, so nobody mistakes it for the real thing.
 
 Development builds ignore the window entirely — waiting until 19:00 to check a
 layout is absurd.
+
+---
+
+## "account-missing-payment-method"
+
+If a call pairs, the room is created, and then both handsets drop with this
+error, nothing in this repository is wrong. Daily is refusing the *join*.
+
+Creating a room is a management-API call and works on an unbilled account.
+Joining one is a media-server session, and Daily will not open a session for
+an account with no payment method on file. The symptom is confusing because
+everything up to the last step succeeds.
+
+Confirm it from the API — an account in this state has never run a session:
+
+```bash
+curl -s -H "Authorization: Bearer $DAILY_API_KEY" \
+  "https://api.daily.co/v1/meetings?limit=3"
+# {"total_count":0,"data":[]}
+```
+
+The fix is to add a card at <https://dashboard.daily.co/> under Billing. It
+has to be done by the account owner; it cannot be scripted, and nobody should
+be entering someone else's card details on their behalf.
+
+Adding a card does not by itself start charging: the free monthly allowance
+still applies, and Aura's calls are audio-only, which is the cheap tier.
+Check the current numbers on the dashboard rather than trusting a figure
+written down here.
