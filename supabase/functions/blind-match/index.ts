@@ -63,6 +63,11 @@ Deno.serve(async (req: Request) => {
   try {
     const { dryRun } = await req.json().catch(() => ({ dryRun: false }));
 
+    // Relaxes verification and age only, so two unverified test accounts can
+    // actually pair. See 0019_test_mode.sql.
+    const { data: tm } = await admin.rpc('is_test_mode');
+    TEST_MODE = tm === true;
+
     // Oldest first, so nobody waits indefinitely behind newer signups
     const { data: signups, error: sErr } = await admin
       .from('blind_date_signups')
@@ -238,6 +243,7 @@ function datesOverlap(a: Signup, b: Signup): boolean {
  */
 function ageAcceptable(a?: Profile, b?: Profile): boolean {
   if (!a || !b) return false;
+  if (TEST_MODE) return true;
   const within = (person: Profile, other: Profile) => {
     if (other.age == null) return true;
     if (person.age_min != null && other.age < person.age_min) return false;
@@ -252,9 +258,21 @@ function ageAcceptable(a?: Profile, b?: Profile): boolean {
  * lib/roles.ts and store/users.ts so the pool can't pair people who would
  * never see each other elsewhere in the app.
  */
+/**
+ * When test_mode is on, the matcher stops refusing pairs it would
+ * otherwise accept -- verification and age only. Everything else (mutual
+ * gender interest, blocks, already-dated) still applies, because relaxing
+ * those would not be testing the product, it would be testing a different
+ * product.
+ */
+let TEST_MODE = false;
+
 function compatible(a?: Profile, b?: Profile): boolean {
   if (!a || !b) return false;
-  if (a.verification_status !== 'verified' || b.verification_status !== 'verified') return false;
+  if (!TEST_MODE &&
+      (a.verification_status !== 'verified' || b.verification_status !== 'verified')) {
+    return false;
+  }
 
   const wants = (p: Profile, other: Profile) => {
     const gi = (p.gender_interest ?? '').toLowerCase();

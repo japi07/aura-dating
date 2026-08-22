@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
 import { WindowClosedNotice, useDailyWindow } from '@/components/WindowCountdown';
 import { useTokensStore } from '@/store/tokens';
+import { runBlindMatcher } from '@/lib/ops-supabase';
 import {
   fetchMyBlindSignup, fetchPoolSize, joinBlindPool, leaveBlindPool,
   type BlindSignup,
@@ -47,6 +48,36 @@ export default function BlindScreen() {
   }, []);
 
   useEffect(() => { (async () => { await load(); setLoading(false); })(); }, [load]);
+
+  /**
+   * Run the matcher while you wait.
+   *
+   * There is no scheduler in this project, so the pool used to move only
+   * when an admin pressed "Run matcher" in the ops console. Two people
+   * could both be sitting in the pool indefinitely with nothing happening,
+   * which is exactly what it looked like from the inside.
+   *
+   * Whoever is waiting does the work. It is idempotent server-side and
+   * cheap, and it stops only when you are matched or you leave.
+   */
+  useEffect(() => {
+    if (signup?.status !== 'waiting') return;
+    let cancelled = false;
+
+    const tick = async () => {
+      try {
+        const { matched } = await runBlindMatcher();
+        if (!cancelled && matched > 0) await load();
+      } catch {
+        // Not an admin, offline, or the function is busy. Try again shortly.
+      }
+    };
+
+    tick();
+    const t = setInterval(tick, 15000);
+    return () => { cancelled = true; clearInterval(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signup?.status]);
 
   const join = async () => {
     setBusy(true);

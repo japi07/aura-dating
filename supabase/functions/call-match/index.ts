@@ -60,6 +60,11 @@ Deno.serve(async (req: Request) => {
   const url = Deno.env.get('SUPABASE_URL')!;
   const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
+  // Relaxes verification only, so two unverified test accounts can pair.
+  // See 0019_test_mode.sql.
+  const { data: tm } = await admin.rpc('is_test_mode');
+  TEST_MODE = tm === true;
+
   // Identify the caller from their own token, never from the request body
   const { data: userData } = await admin.auth.getUser(jwt);
   const me = userData?.user?.id;
@@ -230,9 +235,15 @@ function pairKey(x: string, y: string): string {
  * blind-match function, so the queue cannot pair people who would never see
  * each other anywhere else in the app.
  */
+/** Set per-run from token_settings.test_mode; see 0019_test_mode.sql. */
+let TEST_MODE = false;
+
 function compatible(a?: Profile, b?: Profile): boolean {
   if (!a || !b) return false;
-  if (a.verification_status !== 'verified' || b.verification_status !== 'verified') return false;
+  if (!TEST_MODE &&
+      (a.verification_status !== 'verified' || b.verification_status !== 'verified')) {
+    return false;
+  }
 
   const wants = (p: Profile, other: Profile) => {
     const gi = (p.gender_interest ?? '').toLowerCase();
