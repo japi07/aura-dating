@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
 import {
   callTransportAvailable, createCallSession, type CallSession,
+  CALL_UNAVAILABLE_MESSAGE,
 } from '@/lib/call-transport';
 import {
   joinCallQueue, leaveCallQueue, runCallMatcher, fetchQueueSize,
@@ -61,6 +62,9 @@ export default function CallScreen() {
   const ending = useRef(false);
   const phaseRef = useRef<Phase>('intro');
   useEffect(() => { phaseRef.current = phase; }, [phase]);
+
+  /** True once Daily has actually let us in, not merely once we tried. */
+  const startedRef = useRef(false);
 
   /* ─── resume anything already in flight ─── */
   useEffect(() => {
@@ -131,6 +135,7 @@ export default function CallScreen() {
   const connect = useCallback(async (state: CallState) => {
     if (!callTransportAvailable) return;
     ending.current = false;
+    startedRef.current = false;
     liveCallId.current = state.id;
     setPhase('connecting');
     try {
@@ -139,6 +144,7 @@ export default function CallScreen() {
       session.current = s;
 
       s.on('joined', () => {
+        startedRef.current = true;
         setPhase('live');
         markCallStarted(state.id);
         // Connected. This is the point of no return, so the ticket goes now.
@@ -159,9 +165,20 @@ export default function CallScreen() {
         video: creds.medium === 'video',
       });
     } catch (e: any) {
-      Alert.alert('Could not connect', e?.message || 'Please try again.');
-      await markCallEnded(state.id);
+      // Deliberately does NOT end the call.
+      //
+      // Both handsets run this same code against one shared row, so ending
+      // it here meant whichever side stumbled first destroyed the call for
+      // the other -- who was then told "this call has ended" by call-token
+      // and ran this same branch. One failure, two failures. Leaving the row
+      // alone lets the other side connect, and expire_stale_calls closes it
+      // if neither ever does.
+      Alert.alert(
+        'Could not connect',
+        e?.message || 'Please try again.',
+      );
       liveCallId.current = null;
+      await leaveCallQueue().catch(() => {});
       setPhase('intro');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -188,9 +205,16 @@ export default function CallScreen() {
     const s = session.current;
     session.current = null;
     if (s) { s.leave().then(() => s.destroy()).catch(() => {}); }
-    // Navigating away ends the call for both people rather than leaving a
-    // room open that only expire_stale_calls would ever close.
-    if (liveCallId.current) markCallEnded(liveCallId.current).catch(() => {});
+    // Ending the call on the way out is right once it is actually running --
+    // a room left open helps nobody. But doing it while merely *connecting*
+    // was killing calls the other side was still joining: backgrounding or
+    // backing out of this screen in the seconds after a match flipped the
+    // shared row to "missed" under them.
+    //
+    // So only close what we actually joined.
+    if (liveCallId.current && startedRef.current) {
+      markCallEnded(liveCallId.current).catch(() => {});
+    }
     liveCallId.current = null;
     leaveCallQueue().catch(() => {});
   }, []);
@@ -208,7 +232,25 @@ export default function CallScreen() {
 
   /* ─── actions ─── */
   const join = async () => {
-    if (!callTransportAvailable || !w.open || !hasEntry('call')) return;
+    // Each of these used to be a silent return, which from the outside looked
+    // exactly like the button doing nothing. Say which one it is.
+    if (!callTransportAvailable) {
+      Alert.alert('Not in this build', CALL_UNAVAILABLE_MESSAGE);
+      return;
+    }
+    if (!w.open) {
+      Alert.alert('Not open yet', "Tonight's window has not opened.");
+      return;
+    }
+    if (!hasEntry('call')) {
+      Alert.alert(
+        hasTicket('call') ? 'Already used tonight' : 'Not queued yet',
+        hasTicket('call')
+          ? 'You have already had your call tonight. Come back tomorrow.'
+          : 'Confirm your place first.',
+      );
+      return;
+    }
     // The ticket is NOT spent here. Queueing is not the thing you paid for --
     // a queue that finds nobody, or that you leave, has to be refundable. It
     // is claimed when a call actually connects.
