@@ -93,9 +93,13 @@ Deno.serve(async (req: Request) => {
     const blocked = new Set((blocks ?? []).map((b: any) => pairKey(b.blocker_id, b.blocked_id)));
 
     const { data: priorDates } = await admin.from('dates').select('user_a_id, user_b_id');
-    const alreadyDated = new Set(
-      (priorDates ?? []).map((d: any) => pairKey(d.user_a_id, d.user_b_id)),
-    );
+    // In test mode the same two accounts have to be pairable over and over;
+    // otherwise one blind date between them retires the pairing for good.
+    const alreadyDated = TEST_MODE
+      ? new Set<string>()
+      : new Set(
+          (priorDates ?? []).map((d: any) => pairKey(d.user_a_id, d.user_b_id)),
+        );
 
     const taken = new Set<string>();
     const pairs: [Signup, Signup][] = [];

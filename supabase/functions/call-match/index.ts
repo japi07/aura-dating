@@ -113,13 +113,24 @@ Deno.serve(async (req: Request) => {
 
     // Two people who have already spoken should meet in person or not at all,
     // so the queue never serves the same voice twice.
+    //
+    // "Spoken" means the call actually connected. This used to count every
+    // calls row, including ones that never started -- so a single failed
+    // connection burned the pairing permanently. Two people could sit in the
+    // queue looking at each other forever, having never exchanged a word,
+    // because a room that nobody managed to join once counted as a
+    // conversation. started_at is the honest test.
     const { data: priorCalls } = await admin
       .from('calls')
       .select('user_a_id, user_b_id')
-      .or(`user_a_id.eq.${me},user_b_id.eq.${me}`);
-    const spokenBefore = new Set(
-      (priorCalls ?? []).map((c: any) => pairKey(c.user_a_id, c.user_b_id)),
-    );
+      .or(`user_a_id.eq.${me},user_b_id.eq.${me}`)
+      .not('started_at', 'is', null);
+    const spokenBefore = TEST_MODE
+      // Testing with two accounts means pairing them over and over.
+      ? new Set<string>()
+      : new Set(
+          (priorCalls ?? []).map((c: any) => pairKey(c.user_a_id, c.user_b_id)),
+        );
 
     const mineProfile = byId.get(me);
     const partner = (others as QueueRow[]).find((o) => {
