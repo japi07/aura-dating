@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
 import {
   callTransportAvailable, createCallSession, type CallSession,
-  CALL_UNAVAILABLE_MESSAGE,
+  CALL_UNAVAILABLE_MESSAGE, explainCallError,
 } from '@/lib/call-transport';
 import {
   joinCallQueue, leaveCallQueue, runCallMatcher, fetchQueueSize,
@@ -155,7 +155,7 @@ export default function CallScreen() {
       // Fires on leave() and on Daily's own ejection at the deadline
       s.on('left', () => finishCall(state.id));
       s.on('error', (e: any) => {
-        Alert.alert('Call dropped', e?.errorMsg || 'The connection failed.');
+        Alert.alert('Call dropped', explainCallError(e));
         finishCall(state.id);
       });
 
@@ -173,10 +173,7 @@ export default function CallScreen() {
       // and ran this same branch. One failure, two failures. Leaving the row
       // alone lets the other side connect, and expire_stale_calls closes it
       // if neither ever does.
-      Alert.alert(
-        'Could not connect',
-        e?.message || 'Please try again.',
-      );
+      Alert.alert('Could not connect', explainCallError(e));
       liveCallId.current = null;
       await leaveCallQueue().catch(() => {});
       setPhase('intro');

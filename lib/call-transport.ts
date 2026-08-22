@@ -165,3 +165,34 @@ export async function createCallSession(medium: 'audio' | 'video' = 'audio'): Pr
     },
   };
 }
+
+/**
+ * Daily's error strings, in English.
+ *
+ * `account-missing-payment-method` in particular reads like a bug in this app
+ * and is nothing of the sort: rooms are created through the management API,
+ * which works on an unbilled account, but opening a media session is refused
+ * until a card is on file. Every step succeeds except the last one, which is
+ * the most confusing possible way for it to fail.
+ */
+export function explainCallError(raw: unknown): string {
+  const code = String((raw as any)?.errorMsg ?? (raw as any)?.message ?? raw ?? '');
+
+  if (code.includes('account-missing-payment-method')) {
+    return 'Live calls are not switched on for this account yet. '
+      + 'Add a payment method in the Daily.co dashboard and calls will connect.';
+  }
+  if (code.includes('exp-room') || code.includes('room-expired')) {
+    return 'That call had already finished.';
+  }
+  if (code.includes('not-allowed') || code.includes('invalid-token')) {
+    return 'Your place in this call could not be verified. Try joining again.';
+  }
+  if (code.includes('meeting-full') || code.includes('max-participants')) {
+    return 'Someone else already joined that call.';
+  }
+  if (/network|connection|timeout/i.test(code)) {
+    return 'The connection dropped. Check your signal and try again.';
+  }
+  return code || 'The connection failed.';
+}
