@@ -254,6 +254,23 @@ function rowToDate(row: any, myId: string): ConfirmedDate {
   const amUserA = row.user_a_id === myId;
   const other: Partial<ProfileRow> = (amUserA ? row.b : row.a) ?? {};
   const myRating = amUserA ? row.user_a_rating : row.user_b_rating;
+  const mode = (row.mode ?? 'proposal') as ConfirmedDate['mode'];
+
+  // A blind date promises 'you won't see who it is until you're there' --
+  // app/meet/blind.tsx says so outright. That promise is broken the instant
+  // a photo rides along in the very row that announces the match, so it is
+  // scrubbed here rather than merely hidden in a screen's JSX: this is the
+  // one place every date-fetch path (list, refresh, realtime) funnels
+  // through, and the store persists whatever comes out of it to on-device
+  // storage. A UI-level hide would still leave the real URL sitting in
+  // AsyncStorage and in the client's state tree.
+  //
+  // Once the date is over they have met face to face, so there is nothing
+  // left to protect -- the photo returns in the Past tab, mainly so a
+  // completed blind date does not look permanently broken next to every
+  // other kind of date.
+  const stillBlind = mode === 'blind' && row.status !== 'completed';
+
   return {
     id: row.id,
     proposalId: row.proposal_id ?? '',
@@ -261,7 +278,7 @@ function rowToDate(row: any, myId: string): ConfirmedDate {
       id: other.id ?? '',
       name: other.name ?? 'Member',
       age: other.age ?? 0,
-      photoUrl: other.photo_url ?? '',
+      photoUrl: stillBlind ? '' : (other.photo_url ?? ''),
       verified: other.verification_status === 'verified',
     },
     venue: {
@@ -278,7 +295,7 @@ function rowToDate(row: any, myId: string): ConfirmedDate {
     },
     category: 'dinner',
     startsAt: row.starts_at ?? null,
-    mode: (row.mode ?? 'proposal') as ConfirmedDate['mode'],
+    mode,
     payment: row.payment ?? 'split',
     reminderIds: [],
     status: (row.status === 'no-show' ? 'completed' : row.status) as ConfirmedDate['status'],

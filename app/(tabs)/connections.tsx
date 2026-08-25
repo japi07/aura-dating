@@ -184,6 +184,13 @@ export default function DatesScreen() {
                     <View style={styles.profileRow}>
                       {d.with.photoUrl ? (
                         <Image source={{ uri: d.with.photoUrl }} style={styles.profileImg} />
+                      ) : d.mode === 'blind' ? (
+                        // No photo is the point here, not a missing one —
+                        // the mask says so rather than looking like a broken
+                        // avatar.
+                        <View style={[styles.profileImg, styles.photoFallback]}>
+                          <Text style={{ fontSize: 24 }}>🎭</Text>
+                        </View>
                       ) : (
                         <View style={[styles.profileImg, styles.photoFallback]}>
                           <Ionicons name="person" size={26} color={COLORS.TEXT_MUTED} />
