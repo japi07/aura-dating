@@ -85,7 +85,8 @@ export interface CallSession {
   leave(): Promise<void>;
   setMuted(muted: boolean): void;
   isMuted(): boolean;
-  setSpeakerOn(on: boolean): Promise<void>;
+  /** Returns whether the audio route actually changed. */
+  setSpeakerOn(on: boolean): Promise<boolean>;
   setCameraOn(on: boolean): void;
   on(event: CallEvent, cb: (e?: any) => void): void;
   destroy(): Promise<void>;
@@ -139,13 +140,39 @@ export async function createCallSession(medium: 'audio' | 'video' = 'audio'): Pr
     isMuted() {
       return !call.localAudio();
     },
+    /**
+     * Speaker on/off. Returns whether the route actually changed.
+     *
+     * This was calling call.setAudioDevice(), which is the WEB SDK's API. The
+     * React Native call object does not have it -- the only audio method it
+     * exposes is setNativeInCallAudioMode -- so every press threw instantly
+     * and was swallowed by a catch, while the button happily lit up. The
+     * speaker had never worked once.
+     *
+     * Two mechanisms, because neither is sufficient alone on iOS: the in-call
+     * audio mode decides the DEFAULT route (voice = earpiece, video =
+     * loudspeaker) and is what the call object understands, while the actual
+     * live route lives on the WebRTC native module. Setting the mode without
+     * the device often does nothing mid-call; setting the device without the
+     * mode gets overridden the next time the mode is applied.
+     */
     async setSpeakerOn(on: boolean) {
+      let changed = false;
+
       try {
-        await call.setAudioDevice(on ? 'speakerphone' : 'earpiece');
-      } catch {
-        // Device names vary by platform; fall back to the audio mode switch
-        try { call.setNativeInCallAudioMode(on ? 'video' : 'voice'); } catch { /* noop */ }
+        call.setNativeInCallAudioMode(on ? 'video' : 'voice');
+        changed = true;
+      } catch { /* older SDKs */ }
+
+      const webrtc = (NativeModules as any).WebRTCModule;
+      if (typeof webrtc?.setAudioDevice === 'function') {
+        try {
+          await webrtc.setAudioDevice(on ? 'speakerphone' : 'earpiece');
+          changed = true;
+        } catch { /* device name not supported on this platform */ }
       }
+
+      return changed;
     },
     setCameraOn(on: boolean) {
       call.setLocalVideo(on);

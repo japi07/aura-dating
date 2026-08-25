@@ -53,6 +53,28 @@ export default function DateDetailScreen() {
 
   useEffect(() => { (async () => { await load(); setLoading(false); })(); }, [load]);
 
+  /**
+  * Add one of their times to your own answer and send immediately.
+  *
+  * The alternative -- reopen the picker, find the same day, tap the same
+  * time, hit Send -- is exactly the busywork this screen exists to avoid
+  * once you already know which time works: it is right there in front of
+  * you.
+  */
+  const matchTheirTime = async (iso: string) => {
+    if (!plan) return;
+    setSaving(true);
+    try {
+      const nextSlots = Array.from(new Set([...plan.mySlots, iso]));
+      await submitDateAvailability(id, instantsToPlan(nextSlots));
+      await load();
+    } catch (e: any) {
+      Alert.alert('Could not send', e?.message || 'Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const save = async () => {
     if (!id) return;
     setSaving(true);
@@ -225,10 +247,30 @@ export default function DateDetailScreen() {
                       </Text>
                     </>
                   ) : plan?.theySubmitted ? (
-                    <Text style={s.sentSub}>
-                      None of your times overlapped. Add a few more and we will
-                      keep looking.
-                    </Text>
+                    <>
+                      <Text style={s.sentSub}>
+                        None of your times overlapped. Here is what they sent —
+                        pick one to match, or add a few more of your own.
+                      </Text>
+                      {plan.theirSlots.length > 0 && (
+                        <View style={s.chipWrap}>
+                          {plan.theirSlots.slice(0, 8).map((iso) => (
+                            <TouchableOpacity
+                              key={iso}
+                              style={s.theirChip}
+                              onPress={() => matchTheirTime(iso)}
+                              disabled={saving}
+                              activeOpacity={0.85}
+                            >
+                              <Ionicons name="add-circle-outline" size={14} color={COLORS.BRAND} />
+                              <Text style={s.theirChipText}>
+                                {formatDate(iso)} · {formatTime(iso)}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
+                    </>
                   ) : (
                     <Text style={s.sentSub}>
                       We will nudge them. As soon as they answer we will find a
@@ -314,6 +356,13 @@ const s = StyleSheet.create({
   sentSub: { fontSize: 13, color: COLORS.TEXT_SECONDARY, lineHeight: 19 },
   sentFoot: { fontSize: 12, color: COLORS.TEXT_MUTED, lineHeight: 17, marginTop: 10 },
 
+  theirChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.BRAND_MUTED, borderRadius: 11,
+    paddingHorizontal: 11, paddingVertical: 7,
+    borderWidth: 1, borderColor: COLORS.BRAND_GLOW,
+  },
+  theirChipText: { fontSize: 12, fontWeight: '700', color: COLORS.BRAND },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   chip: {
     backgroundColor: COLORS.LIKE_BG, borderRadius: 11,

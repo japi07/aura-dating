@@ -5,10 +5,12 @@
  * slots, she picks one. A blind date has no sender, so it runs in both — each
  * person posts when they're free and the concierge books inside the overlap.
  *
- * You never see their raw availability, only the overlap. That is enforced in
- * the database (date_availability is own-rows-only under RLS) rather than
- * here, and it matters: shown the other person's answer first, most people
- * would simply mirror it, and the overlap would stop meaning anything.
+ * Their raw times are hidden until THEY have submitted an answer of their
+ * own -- shown one first, most people would simply mirror it, and the
+ * overlap would stop meaning anything. Once both sides have committed,
+ * that risk is gone, so their times become visible: useful always, and
+ * necessary when nothing overlapped and the honest next step is "here is
+ * what they said, pick one that matches."
  */
 import { getSupabase, supabaseEnabled } from './supabase';
 import type { DayPlan } from '@/components/DatePlanner';
@@ -23,6 +25,16 @@ export interface DatePlanState {
   theySubmitted: boolean;
   /** Instants you both offered. Empty until you both have. */
   overlap: string[];
+  /**
+   * Their raw times, once THEY have submitted. Empty before that.
+   *
+   * Deliberately timed to their submission rather than yours: someone who
+   * has already committed an answer cannot retroactively copy it, so once
+   * they have answered there is nothing left to protect -- only something
+   * useful to show, especially when overlap is empty and the honest next
+   * step is "here is what they said, pick one that matches."
+   */
+  theirSlots: string[];
   startsAt: string | null;
   venueName: string | null;
 }
@@ -72,6 +84,7 @@ export async function fetchDatePlanState(dateId: string): Promise<DatePlanState 
     iSubmitted: !!r.i_submitted,
     theySubmitted: !!r.they_submitted,
     overlap: r.overlap ?? [],
+    theirSlots: r.their_slots ?? [],
     startsAt: r.starts_at ?? null,
     venueName: r.venue_name ?? null,
   };

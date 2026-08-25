@@ -319,8 +319,13 @@ export default function CallScreen() {
     const s = session.current;
     if (!s) return;
     const next = !speaker;
-    await s.setSpeakerOn(next);
-    setSpeaker(next);
+    // Only flip the button if the route actually changed. It used to report
+    // success unconditionally, which is worse than doing nothing: pressing it
+    // during a call and hearing no difference reads as a broken phone, not a
+    // broken button.
+    const changed = await s.setSpeakerOn(next);
+    if (changed) { setSpeaker(next); return; }
+    Alert.alert('Speaker', 'Could not switch the audio route on this device.');
   };
 
   /* ─── render ─── */
