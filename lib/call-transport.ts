@@ -159,6 +159,20 @@ export async function createCallSession(medium: 'audio' | 'video' = 'audio'): Pr
     async setSpeakerOn(on: boolean) {
       let changed = false;
 
+      // These IDs are defined by Daily's native WebRTC bridge. They are not
+      // generic React Native route names: iOS silently ignores the lowercase
+      // values we previously supplied ("speakerphone" / "earpiece").
+      const deviceId = on ? 'SPEAKERPHONE' : 'WIRED_OR_EARPIECE';
+
+      // Prefer Daily's public CallObject API. It owns the audio session for
+      // this call and propagates the route change to both iOS and Android.
+      if (typeof call.setAudioDevice === 'function') {
+        try {
+          await call.setAudioDevice(deviceId);
+          changed = true;
+        } catch { /* use the native bridge fallback below */ }
+      }
+
       try {
         call.setNativeInCallAudioMode(on ? 'video' : 'voice');
         changed = true;
@@ -167,7 +181,7 @@ export async function createCallSession(medium: 'audio' | 'video' = 'audio'): Pr
       const webrtc = (NativeModules as any).WebRTCModule;
       if (typeof webrtc?.setAudioDevice === 'function') {
         try {
-          await webrtc.setAudioDevice(on ? 'speakerphone' : 'earpiece');
+          await webrtc.setAudioDevice(deviceId);
           changed = true;
         } catch { /* device name not supported on this platform */ }
       }
