@@ -17,7 +17,7 @@ import type { DayPlan } from '@/components/DatePlanner';
 
 export interface DatePlanState {
   dateId: string;
-  mode: 'proposal' | 'blind' | 'call';
+  mode: 'proposal' | 'blind' | 'call' | 'event';
   status: string;
   /** The instants you offered */
   mySlots: string[];
@@ -121,7 +121,7 @@ export interface RoadmapStage {
  * difference between "we're planning it" and knowing whose turn it is.
  */
 export function buildRoadmap(input: {
-  mode: 'proposal' | 'blind' | 'call';
+  mode: 'proposal' | 'blind' | 'call' | 'event';
   status: string;
   iSubmitted: boolean;
   theySubmitted: boolean;
@@ -130,16 +130,24 @@ export function buildRoadmap(input: {
 }): RoadmapStage[] {
   const { mode, status, iSubmitted, theySubmitted, hasTime, followUpDue } = input;
   const done = status === 'completed';
-  const planning = status === 'planning' || !hasTime;
+  // An event introduction arrives with the venue and time already fixed -
+  // the event's own - so it is never in the 'work out when you are both
+  // free' phase that blind and call dates go through.
+  const planning = mode !== 'event' && (status === 'planning' || !hasTime);
 
   const firstTitle =
-    mode === 'blind' ? 'Matched' : mode === 'call' ? 'You both said yes' : 'Proposal accepted';
+    mode === 'blind' ? 'Matched'
+    : mode === 'call' ? 'You both said yes'
+    : mode === 'event' ? 'Introduced at an event'
+    : 'Proposal accepted';
   const firstDetail =
     mode === 'blind'
       ? 'We found someone we think you will get on with'
       : mode === 'call'
         ? 'You each said you would like to meet'
-        : 'You accepted the invitation';
+        : mode === 'event'
+          ? 'You are both going, and you both said yes to an introduction'
+          : 'You accepted the invitation';
 
   const stages: RoadmapStage[] = [
     { key: 'matched', title: firstTitle, detail: firstDetail, state: 'done' },

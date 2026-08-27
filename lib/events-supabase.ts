@@ -103,3 +103,87 @@ export async function cancelEventRsvp(eventId: string): Promise<void> {
   const { error } = await supabase.from('event_rsvps').delete().eq('event_id', eventId).eq('user_id', uid);
   if (error) throw error;
 }
+
+/* ─── who else is going ─── */
+
+export interface EventMatchCount {
+  /** Other attendees who pass the same test the matchers apply */
+  matching: number;
+  /** How many of those have said they are open to an introduction */
+  open: number;
+}
+
+/**
+ * How many people worth meeting are at each upcoming event.
+ *
+ * One call for the whole list rather than one per card — the Events tab
+ * renders a dozen of these and a round trip each would be visible.
+ *
+ * Counts only. event_rsvps is own-rows-only under RLS, so this crosses that
+ * boundary through a SECURITY DEFINER function that returns integers and
+ * never an identity: "4 members matching your criteria are attending" is a
+ * reason to buy a ticket, "Sarah is attending" is a privacy incident.
+ */
+export async function fetchEventMatchCounts(): Promise<Record<string, EventMatchCount>> {
+  if (!supabaseEnabled) return {};
+  try {
+    const { data, error } = await getSupabase().rpc('event_match_counts');
+    if (error) return {};
+    const out: Record<string, EventMatchCount> = {};
+    for (const r of (data ?? []) as any[]) {
+      out[r.event_id] = { matching: r.match_count ?? 0, open: r.open_count ?? 0 };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Full RSVP rows for the current user, including the introductions choice. */
+export async function fetchMyEventRsvpDetails(): Promise<
+  Record<string, { openToIntros: boolean }>
+> {
+  if (!supabaseEnabled) return {};
+  const uid = await getSessionUserId();
+  if (!uid) return {};
+  const { data, error } = await getSupabase()
+    .from('event_rsvps')
+    .select('event_id, open_to_intros')
+    .eq('user_id', uid);
+  if (error) return {};
+  const out: Record<string, { openToIntros: boolean }> = {};
+  for (const r of (data ?? []) as any[]) {
+    out[r.event_id] = { openToIntros: !!r.open_to_intros };
+  }
+  return out;
+}
+
+/**
+ * Say whether you would like to be introduced to matching people at an event.
+ *
+ * Defaults to off server-side and is asked explicitly after the RSVP: turning
+ * up to an event is not consent to be introduced to strangers.
+ */
+export async function setEventIntroOptIn(eventId: string, open: boolean): Promise<void> {
+  const { error } = await getSupabase().rpc('set_event_intro_opt_in', {
+    p_event_id: eventId,
+    p_open: open,
+  });
+  if (error) throw error;
+}
+
+/**
+ * Pair up everyone at an event who opted in and matches.
+ *
+ * Double opt-in on both sides, and it produces ordinary date rows at the
+ * event's own venue and time — so the Dates tab, reminders and the follow-up
+ * all work with no special casing. Safe to call more than once; a pair that
+ * already has a date is skipped.
+ */
+export async function makeEventIntros(eventId: string): Promise<number> {
+  const { data, error } = await getSupabase().rpc('make_event_intros', {
+    p_event_id: eventId,
+  });
+  if (error) throw error;
+  return (data as number | null) ?? 0;
+}

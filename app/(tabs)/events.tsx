@@ -9,7 +9,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
 import { openInMaps } from '@/lib/maps';
 import { addDateToCalendar } from '@/lib/calendar';
-import { fetchEvents, fetchMyEventRsvps, rsvpToEvent, type AppEvent } from '@/lib/events-supabase';
+import {
+  fetchEvents, fetchMyEventRsvps, rsvpToEvent,
+  fetchEventMatchCounts, fetchMyEventRsvpDetails, setEventIntroOptIn, makeEventIntros,
+  type AppEvent, type EventMatchCount,
+} from '@/lib/events-supabase';
 import {
   openTicketCheckout, fetchMyTicketedEventIds,
   fetchTicketAvailability, formatTicketPrice, type TicketAvailability,
@@ -46,16 +50,71 @@ export default function EventsScreen() {
   const [ticketed, setTicketed] = useState<string[]>([]);
   /** Live Ticket Tailor availability, keyed by our event id */
   const [availability, setAvailability] = useState<Record<string, TicketAvailability>>({});
+  /** How many people worth meeting are at each event, keyed by event id */
+  const [matches, setMatches] = useState<Record<string, EventMatchCount>>({});
+  /** Whether I have said yes to introductions, per event I am going to */
+  const [introOptIn, setIntroOptIn] = useState<Record<string, boolean>>({});
   const { user } = useAuthStore();
+
+  /**
+   * Ask, once, whether they want to be introduced to matching people here.
+   *
+   * Deliberately a separate question from the RSVP rather than a side
+   * effect of it. Buying a ticket to a pottery class is not consent to be
+   * paired off with strangers, and the server defaults the flag to false
+   * so declining -- or dismissing this -- leaves you simply attending.
+   */
+  const askAboutIntros = useCallback((e: LondonEvent) => {
+    const n = matches[e.id]?.matching ?? 0;
+    Alert.alert(
+      n > 0 ? `${n} ${n === 1 ? 'member' : 'members'} here match you` : 'Want an introduction?',
+      n > 0
+        ? `Shall we introduce you at ${e.venue}? We only do it if they say yes too.`
+        : 'If anyone who matches you books this, shall we introduce you? Only if they say yes too.',
+      [
+        { text: 'Just the event', style: 'cancel' },
+        {
+          text: 'Yes, introduce me',
+          onPress: async () => {
+            try {
+              await setEventIntroOptIn(e.id, true);
+              setIntroOptIn((prev) => ({ ...prev, [e.id]: true }));
+
+              // Pair up whoever is ready right now. There is no scheduler in
+              // this project, so the person who just said yes does the work -
+              // the same approach the blind pool takes. Anyone who opts in
+              // later runs it again and finds this yes waiting.
+              const made = await makeEventIntros(e.id).catch(() => 0);
+              if (made > 0) {
+                Alert.alert(
+                  'Introduction made',
+                  'They said yes too. It is in your Dates tab with the venue and time.',
+                );
+              }
+              await load();
+            } catch {
+              Alert.alert('Could not save that', 'Please try again from the event.');
+            }
+          },
+        },
+      ],
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matches]);
 
   const load = useCallback(async () => {
     try {
-      const [list, mine, bought] = await Promise.all([
+      const [list, mine, bought, counts, details] = await Promise.all([
         fetchEvents(), fetchMyEventRsvps(), fetchMyTicketedEventIds(),
+        fetchEventMatchCounts(), fetchMyEventRsvpDetails(),
       ]);
       setEvents(list);
       setReserved(mine);
       setTicketed(bought);
+      setMatches(counts);
+      setIntroOptIn(
+        Object.fromEntries(Object.entries(details).map(([k, v]) => [k, v.openToIntros])),
+      );
 
       // Pull live prices / remaining tickets for events sold via Ticket Tailor
       const ticketedEvents = list.filter((e) => e.ticketTailorEventId);
@@ -166,7 +225,12 @@ export default function EventsScreen() {
               startsAt: new Date(e.date),
               durationMinutes: 120,
             });
-            Alert.alert('🎉 Reserved!', `See you at ${e.venue}.`);
+            Alert.alert('🎉 Reserved!', `See you at ${e.venue}.`, [
+              // Asked after the booking succeeds, never before: the event is
+              // the thing they came for, and the introduction is a separate
+              // question they are free to decline.
+              { text: 'OK', onPress: () => askAboutIntros(e) },
+            ]);
           },
         },
       ]
@@ -341,6 +405,29 @@ export default function EventsScreen() {
                   </View>
                   <Text style={styles.progressLabel}>{remaining}/{item.totalSpots} · {displayPrice(item)}</Text>
                 </View>
+
+                {/* The actual reason to come. Only shown when there is a real
+                    number behind it — "0 members match you" is worse than
+                    saying nothing at all. */}
+                {(matches[item.id]?.matching ?? 0) > 0 && (
+                  <View style={styles.matchRow}>
+                    <Ionicons name="sparkles" size={11} color={COLORS.BRAND} />
+                    <Text style={styles.matchText} numberOfLines={1}>
+                      {matches[item.id].matching}{' '}
+                      {matches[item.id].matching === 1 ? 'member' : 'members'} matching
+                      {' '}your criteria {matches[item.id].matching === 1 ? 'is' : 'are'} attending
+                    </Text>
+                  </View>
+                )}
+
+                {isReserved && introOptIn[item.id] && (
+                  <View style={styles.introRow}>
+                    <Ionicons name="hand-left-outline" size={11} color={COLORS.LIKE} />
+                    <Text style={styles.introText}>
+                      We'll introduce you to anyone here who says yes too
+                    </Text>
+                  </View>
+                )}
               </View>
               <Ionicons name="chevron-forward" size={16} color={COLORS.BORDER} style={{ alignSelf: 'center' }} />
             </TouchableOpacity>
@@ -427,6 +514,16 @@ const styles = StyleSheet.create({
   cardMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
   cardMeta: { fontSize: 12, color: COLORS.TEXT_MUTED },
   dot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: COLORS.BORDER },
+  matchRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 7,
+    backgroundColor: COLORS.BRAND_MUTED, alignSelf: 'flex-start',
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
+  },
+  matchText: { fontSize: 11, fontWeight: '800', color: COLORS.BRAND, flexShrink: 1 },
+  introRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5,
+  },
+  introText: { fontSize: 10.5, fontWeight: '700', color: COLORS.LIKE, flexShrink: 1 },
   progressRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   progressTrack: { flex: 1, height: 4, backgroundColor: COLORS.BORDER_LIGHT, borderRadius: 2, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 2 },

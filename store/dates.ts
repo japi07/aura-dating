@@ -23,7 +23,7 @@ const STORAGE_KEY = 'aura.dates.v1';
 export type DateInterest = 'yes' | 'no' | 'already';
 
 /** How this date came about */
-export type DateMode = 'proposal' | 'blind' | 'call';
+export type DateMode = 'proposal' | 'blind' | 'call' | 'event';
 
 export interface ConfirmedDate {
   id: string;

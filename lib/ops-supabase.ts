@@ -12,7 +12,7 @@ import { getSessionUserId } from './proposals-supabase';
 
 export interface PlanningDate {
   dateId: string;
-  mode: 'proposal' | 'blind' | 'call';
+  mode: 'proposal' | 'blind' | 'call' | 'event';
   status: string;
   createdAt: string;
   startsAt: string | null;
