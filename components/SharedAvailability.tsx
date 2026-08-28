@@ -101,7 +101,16 @@ export function SharedAvailability({
       return day.get(hhmm)!;
     };
 
+    // A day with no times yet still has to appear, or picking a date from
+    // the calendar does visibly nothing: it lands in state, produces no
+    // rows, and so renders no block -- and the "Add a time" control that
+    // would rescue it lives inside the block that was never drawn.
+    const touchDay = (date: string) => {
+      if (!byDay.has(date)) byDay.set(date, new Map());
+    };
+
     for (const d of value) {
+      touchDay(d.date);
       for (const s of d.slots) touch(d.date, s).mine = true;
     }
 
@@ -134,9 +143,14 @@ export function SharedAvailability({
     if (!iso) return;
     setDateKey((k) => k + 1);
     if (value.some((d) => d.date === iso)) return;
-    if (groups.length >= maxDays) return;
+    // Counts MY days. groups includes days that exist only because they
+    // offered a time on them, and their calendar should not spend my budget.
+    if (value.length >= maxDays) return;
     onChange([...value, { date: iso, slots: [] }].sort((a, b) => a.date.localeCompare(b.date)));
   };
+
+  const removeDay = (date: string) =>
+    onChange(value.filter((d) => d.date !== date));
 
   const addSlot = (date: string, hhmm: string) => {
     setAddingFor(null);
@@ -156,11 +170,15 @@ export function SharedAvailability({
     if (row.theirInstant) { onToggleTheirInstant(row.theirInstant); return; }
     const day = value.find((d) => d.date === date);
     if (!day) return;
+    // The day stays even when its last time goes. Dropping it here would
+    // make un-ticking your only slot delete the day out from under you,
+    // taking the "Add a time" control with it -- the same disappearing act
+    // that made picking a date from the calendar look broken.
     onChange(value.map((d) =>
       d.date === date
         ? { ...d, slots: d.slots.filter((s) => s !== row.hhmm) }
         : d,
-    ).filter((d) => d.slots.length > 0 || theirSlots.length > 0));
+    ));
   };
 
   return (
@@ -187,7 +205,18 @@ export function SharedAvailability({
 
       {groups.map((g) => (
         <View key={g.date} style={s.dayBlock}>
-          <Text style={s.dayLabel}>{prettyDay(g.date)}</Text>
+          <View style={s.dayHeader}>
+            <Text style={s.dayLabel}>{prettyDay(g.date)}</Text>
+            {/* Only days that are purely mine can go. A day exists for them
+                too once they have offered a time on it, and removing it
+                would just hide their answer. */}
+            {value.some((d) => d.date === g.date)
+              && !g.rows.some((r) => r.theirs) && (
+              <TouchableOpacity onPress={() => removeDay(g.date)} hitSlop={hit}>
+                <Ionicons name="close" size={15} color={COLORS.TEXT_MUTED} />
+              </TouchableOpacity>
+            )}
+          </View>
 
           {g.rows.map((row) => {
             const agreed = row.mine && row.theirs;
@@ -228,15 +257,15 @@ export function SharedAvailability({
         </View>
       ))}
 
-      {groups.length < maxDays && (
+      {value.length < maxDays && (
         <View style={{ marginTop: 4 }}>
           <DateField
             key={dateKey}
-            label={groups.length === 0 ? 'Pick a day' : 'Add another day'}
+            label={value.length === 0 ? 'Pick a day' : 'Add another day'}
             value=""
             onChange={addDay}
             mode="future"
-            placeholder={groups.length === 0 ? 'Choose a date' : '+ Add more days'}
+            placeholder={value.length === 0 ? 'Choose a date' : '+ Add more days'}
           />
         </View>
       )}
@@ -301,6 +330,7 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.SURFACE, borderRadius: 16, padding: 12, marginBottom: 10,
     borderWidth: 1, borderColor: COLORS.BORDER_LIGHT,
   },
+  dayHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   dayLabel: {
     fontSize: 12, fontWeight: '800', color: COLORS.TEXT,
     marginBottom: 8, letterSpacing: 0.2,
