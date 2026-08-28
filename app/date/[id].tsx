@@ -40,7 +40,6 @@ export default function DateDetailScreen() {
   const [draft, setDraft] = useState<DayPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [editing, setEditing] = useState(false);
   /**
    * Times taken from THEIR list, kept as the exact instants they arrived as.
    *
@@ -70,29 +69,6 @@ export default function DateDetailScreen() {
 
   useEffect(() => { (async () => { await load(); setLoading(false); })(); }, [load]);
 
-  /**
-  * Add one of their times to your own answer and send immediately.
-  *
-  * The alternative -- reopen the picker, find the same day, tap the same
-  * time, hit Send -- is exactly the busywork this screen exists to avoid
-  * once you already know which time works: it is right there in front of
-  * you.
-  */
-  const matchTheirTime = async (iso: string) => {
-    if (!plan) return;
-    setSaving(true);
-    try {
-      // Both sides are already exact instants -- mine came from the server,
-      // theirs from this list -- so they go straight back without passing
-      // through the wall-clock representation at all.
-      await submitDateAvailabilityInstants(id, [...plan.mySlots, iso]);
-      await load();
-    } catch (e: any) {
-      Alert.alert('Could not send', e?.message || 'Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   /**
    * Compare by INSTANT, never by string.
@@ -149,7 +125,6 @@ export default function DateDetailScreen() {
       // meant; the chips contribute exact instants, which is what they were
       // handed. Merged as instants so neither is reinterpreted.
       await submitDateAvailabilityInstants(id, [...planToInstants(draft), ...tapped]);
-      setEditing(false);
       await load();
       Alert.alert(
         'Sent',
@@ -173,9 +148,9 @@ export default function DateDetailScreen() {
     followUpDue: false,
   });
 
+  const overlapCount = plan?.overlap?.length ?? 0;
   const needsAvailability =
     (plan?.status ?? 'planning') === 'planning' && !(plan?.startsAt ?? date?.startsAt);
-  const showPlanner = needsAvailability && (editing || !plan?.iSubmitted);
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
@@ -253,122 +228,66 @@ export default function DateDetailScreen() {
           {/* Availability */}
           {needsAvailability && (
             <>
-              <Text style={s.sectionLabel}>
-                {showPlanner ? 'When are you free?' : 'Your times'}
-              </Text>
+              <Text style={s.sectionLabel}>When are you both free?</Text>
 
-              {showPlanner ? (
-                <>
-                  <Text style={s.hint}>
-                    Add every evening that genuinely works. The more you give,
-                    the more likely we find one you both share.
+              {/* Where the plan stands, as a line above the grid rather than
+                  a card instead of it.
+
+                  Sending your times used to swap the grid out for a summary,
+                  so the one view that shows both people disappeared exactly
+                  when it became most useful -- the moment there was something
+                  of theirs to compare against. The grid is now the screen,
+                  from the first visit to the last, and this only narrates it. */}
+              <View style={[s.statusBar, overlapCount > 0 && s.statusBarGood]}>
+                <Ionicons
+                  name={
+                    overlapCount > 0 ? 'checkmark-circle'
+                    : plan?.iSubmitted ? 'hourglass-outline'
+                    : 'calendar-outline'
+                  }
+                  size={16}
+                  color={overlapCount > 0 ? COLORS.LIKE : COLORS.TEXT_MUTED}
+                />
+                <Text style={[s.statusText, overlapCount > 0 && s.statusTextGood]}>
+                  {overlapCount > 0
+                    ? `${overlapCount} ${overlapCount === 1 ? 'time works' : 'times work'} for you both — we will book one`
+                    : plan?.iSubmitted && plan?.theySubmitted
+                      ? 'No time you have both said yes to yet — tap one of theirs, or add more'
+                      : plan?.iSubmitted
+                        ? 'Sent. We will nudge them and update this the moment they answer'
+                        : plan?.theySubmitted
+                          ? 'They have sent theirs — tick the ones that work for you'
+                          : 'Add the evenings that work, and theirs will appear here too'}
+                </Text>
+              </View>
+
+              <SharedAvailability
+                value={draft}
+                onChange={setDraft}
+                theirSlots={plan?.theirSlots ?? []}
+                theySubmitted={!!plan?.theySubmitted}
+                onToggleTheirInstant={toggleTheirTime}
+                isMine={draftHas}
+              />
+
+              <TouchableOpacity
+                style={[s.primaryBtn, saving && { opacity: 0.7 }]}
+                onPress={save}
+                disabled={saving}
+                activeOpacity={0.88}
+              >
+                {saving ? <ActivityIndicator color="#fff" /> : (
+                  <Text style={s.primaryText}>
+                    {plan?.iSubmitted ? 'Update my times' : 'Send my times'}
                   </Text>
+                )}
+              </TouchableOpacity>
 
-                  {/* One grid, both answers.
-
-                      Their times used to live in a card above the picker, so
-                      the actual question -- is there an evening we have both
-                      said yes to -- was something you worked out by looking
-                      back and forth between two lists. Every time either of
-                      us has offered is now one row carrying both answers. */}
-                  <SharedAvailability
-                    value={draft}
-                    onChange={setDraft}
-                    theirSlots={plan?.theirSlots ?? []}
-                    theySubmitted={!!plan?.theySubmitted}
-                    onToggleTheirInstant={toggleTheirTime}
-                    isMine={draftHas}
-                  />
-
-
-                  <TouchableOpacity
-                    style={[s.primaryBtn, saving && { opacity: 0.7 }]}
-                    onPress={save}
-                    disabled={saving}
-                    activeOpacity={0.88}
-                  >
-                    {saving ? <ActivityIndicator color="#fff" /> : (
-                      <Text style={s.primaryText}>
-                        {plan?.iSubmitted ? 'Update my times' : 'Send my times'}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-
-                  {plan?.iSubmitted && (
-                    <TouchableOpacity style={s.ghostBtn} onPress={() => setEditing(false)}>
-                      <Text style={s.ghostText}>Cancel</Text>
-                    </TouchableOpacity>
-                  )}
-                </>
-              ) : (
-                <View style={s.sentCard}>
-                  <View style={s.sentTop}>
-                    <Ionicons name="checkmark-circle" size={18} color={COLORS.LIKE} />
-                    <Text style={s.sentTitle}>
-                      {plan?.theySubmitted
-                        ? 'You have both sent your times'
-                        : 'Sent — waiting on them'}
-                    </Text>
-                  </View>
-
-                  {plan!.overlap.length > 0 ? (
-                    <>
-                      <Text style={s.sentSub}>
-                        {plan!.overlap.length === 1
-                          ? 'One time works for you both:'
-                          : `${plan!.overlap.length} times work for you both:`}
-                      </Text>
-                      <View style={s.chipWrap}>
-                        {plan!.overlap.slice(0, 6).map((iso) => (
-                          <View key={iso} style={s.chip}>
-                            <Text style={s.chipText}>
-                              {formatDate(iso)} · {formatTime(iso)}
-                            </Text>
-                          </View>
-                        ))}
-                      </View>
-                      <Text style={s.sentFoot}>
-                        We will book one of these and confirm the venue here.
-                      </Text>
-                    </>
-                  ) : plan?.theySubmitted ? (
-                    <>
-                      <Text style={s.sentSub}>
-                        None of your times overlapped. Here is what they sent —
-                        pick one to match, or add a few more of your own.
-                      </Text>
-                      {plan.theirSlots.length > 0 && (
-                        <View style={s.chipWrap}>
-                          {plan.theirSlots.slice(0, 8).map((iso) => (
-                            <TouchableOpacity
-                              key={iso}
-                              style={s.theirChip}
-                              onPress={() => matchTheirTime(iso)}
-                              disabled={saving}
-                              activeOpacity={0.85}
-                            >
-                              <Ionicons name="add-circle-outline" size={14} color={COLORS.BRAND} />
-                              <Text style={s.theirChipText}>
-                                {formatDate(iso)} · {formatTime(iso)}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      )}
-                    </>
-                  ) : (
-                    <Text style={s.sentSub}>
-                      We will nudge them. As soon as they answer we will find a
-                      time you both have free.
-                    </Text>
-                  )}
-
-                  <TouchableOpacity style={s.ghostBtn} onPress={() => setEditing(true)}>
-                    <Ionicons name="create-outline" size={15} color={COLORS.BRAND} />
-                    <Text style={[s.ghostText, { color: COLORS.BRAND }]}>Change my times</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+              <Text style={s.smallPrintCentre}>
+                {plan?.iSubmitted
+                  ? 'Change these any time until we book it.'
+                  : 'You can change these later.'}
+              </Text>
             </>
           )}
         </ScrollView>
@@ -418,40 +337,27 @@ const s = StyleSheet.create({
     shadowRadius: 10, elevation: 2,
   },
 
-  hint: { fontSize: 12.5, color: COLORS.TEXT_SECONDARY, lineHeight: 18, marginBottom: 14 },
 
+  statusBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 9,
+    backgroundColor: COLORS.BG, borderRadius: 13,
+    paddingHorizontal: 12, paddingVertical: 11, marginBottom: 14,
+    borderWidth: 1, borderColor: COLORS.BORDER_LIGHT,
+  },
+  statusBarGood: { backgroundColor: COLORS.LIKE_BG, borderColor: COLORS.LIKE_BG },
+  statusText: {
+    flex: 1, fontSize: 12.5, fontWeight: '700', color: COLORS.TEXT_SECONDARY,
+    lineHeight: 17,
+  },
+  statusTextGood: { color: COLORS.LIKE },
+  smallPrintCentre: {
+    fontSize: 11.5, color: COLORS.TEXT_MUTED, textAlign: 'center', marginTop: 10,
+  },
   primaryBtn: {
     backgroundColor: COLORS.BRAND, borderRadius: 16, paddingVertical: 16,
     alignItems: 'center', marginTop: 16,
   },
   primaryText: { fontSize: 15, fontWeight: '800', color: '#fff' },
-  ghostBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: 14, marginTop: 6,
-  },
-  ghostText: { fontSize: 14, fontWeight: '700', color: COLORS.TEXT_MUTED },
 
-  sentCard: {
-    backgroundColor: COLORS.SURFACE, borderRadius: 20, padding: 18,
-    shadowColor: '#1A0F26', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05,
-    shadowRadius: 10, elevation: 2,
-  },
-  sentTop: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 8 },
-  sentTitle: { flex: 1, fontSize: 14.5, fontWeight: '800', color: COLORS.TEXT },
-  sentSub: { fontSize: 13, color: COLORS.TEXT_SECONDARY, lineHeight: 19 },
-  sentFoot: { fontSize: 12, color: COLORS.TEXT_MUTED, lineHeight: 17, marginTop: 10 },
 
-  theirChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: COLORS.BRAND_MUTED, borderRadius: 11,
-    paddingHorizontal: 11, paddingVertical: 7,
-    borderWidth: 1, borderColor: COLORS.BRAND_GLOW,
-  },
-  theirChipText: { fontSize: 12, fontWeight: '700', color: COLORS.BRAND },
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  chip: {
-    backgroundColor: COLORS.LIKE_BG, borderRadius: 11,
-    paddingHorizontal: 11, paddingVertical: 7,
-  },
-  chipText: { fontSize: 12, fontWeight: '700', color: COLORS.LIKE },
 });
