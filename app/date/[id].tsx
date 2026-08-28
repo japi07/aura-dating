@@ -7,7 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
-import { DatePlanner, type DayPlan } from '@/components/DatePlanner';
+import { type DayPlan } from '@/components/DatePlanner';
+import { SharedAvailability } from '@/components/SharedAvailability';
 import { DateRoadmap } from '@/components/DateRoadmap';
 import { useDatesStore } from '@/store/dates';
 import {
@@ -110,10 +111,19 @@ export default function DateDetailScreen() {
     return !isNaN(ta) && ta === tb;
   };
 
-  /** Have I already taken this one of theirs? */
-  const draftHas = (iso: string) =>
-    tapped.some((x) => sameInstant(x, iso))
-    || planToInstants(draft).some((x) => sameInstant(x, iso));
+  /**
+   * Have I already taken this one of theirs?
+   *
+   * Memoised because SharedAvailability lists it as a useMemo dependency —
+   * a fresh closure on every render would rebuild the whole grid on every
+   * keystroke and defeat the point of the memo.
+   */
+  const draftHas = useCallback(
+    (iso: string) =>
+      tapped.some((x) => sameInstant(x, iso))
+      || planToInstants(draft).some((x) => sameInstant(x, iso)),
+    [tapped, draft],
+  );
 
   /**
    * Add or remove one of their times from my own selection.
@@ -254,61 +264,22 @@ export default function DateDetailScreen() {
                     the more likely we find one you both share.
                   </Text>
 
-                  {/* What they picked, while you are still picking.
+                  {/* One grid, both answers.
 
-                      0015 hid this on the theory that seeing their answer
-                      first invites mirroring. In a dating app that reasoning
-                      is backwards: two people trying to find one evening they
-                      both have free are not adversaries, and "mirroring" is
-                      just the word for agreeing. Withholding it only produced
-                      the no-overlap dead end.
+                      Their times used to live in a card above the picker, so
+                      the actual question -- is there an evening we have both
+                      said yes to -- was something you worked out by looking
+                      back and forth between two lists. Every time either of
+                      us has offered is now one row carrying both answers. */}
+                  <SharedAvailability
+                    value={draft}
+                    onChange={setDraft}
+                    theirSlots={plan?.theirSlots ?? []}
+                    theySubmitted={!!plan?.theySubmitted}
+                    onToggleTheirInstant={toggleTheirTime}
+                    isMine={draftHas}
+                  />
 
-                      Tap one to add it to yours. */}
-                  {(plan?.theirSlots?.length ?? 0) > 0 && (
-                    <View style={s.theirsCard}>
-                      <View style={s.theirsHead}>
-                        <Ionicons name="person-outline" size={14} color={COLORS.PLUM} />
-                        <Text style={s.theirsTitle}>
-                          {plan!.theirSlots.length === 1
-                            ? 'They are free at one time'
-                            : `They are free at ${plan!.theirSlots.length} times`}
-                        </Text>
-                      </View>
-                      <Text style={s.theirsHint}>
-                        Tap any that work for you and we will book one of them.
-                      </Text>
-                      <View style={s.chipWrap}>
-                        {plan!.theirSlots.slice(0, 12).map((iso) => {
-                          const picked = draftHas(iso);
-                          return (
-                            <TouchableOpacity
-                              key={iso}
-                              style={[s.theirChip, picked && s.theirChipOn]}
-                              onPress={() => toggleTheirTime(iso)}
-                              activeOpacity={0.8}
-                            >
-                              {picked && (
-                                <Ionicons name="checkmark" size={12} color="#fff" />
-                              )}
-                              <Text style={[s.theirChipText, picked && { color: '#fff' }]}>
-                                {formatDate(iso)} · {formatTime(iso)}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                      {plan!.theirSlots.length > 12 && (
-                        <Text style={s.theirsMore}>
-                          {/* Saying so, rather than quietly truncating someone's
-                              availability and letting the other person think
-                              that is all they offered. */}
-                          + {plan!.theirSlots.length - 12} more they are free for
-                        </Text>
-                      )}
-                    </View>
-                  )}
-
-                  <DatePlanner value={draft} onChange={setDraft} />
 
                   <TouchableOpacity
                     style={[s.primaryBtn, saving && { opacity: 0.7 }]}
@@ -449,17 +420,6 @@ const s = StyleSheet.create({
 
   hint: { fontSize: 12.5, color: COLORS.TEXT_SECONDARY, lineHeight: 18, marginBottom: 14 },
 
-  theirsCard: {
-    backgroundColor: COLORS.PLUM_MUTED, borderRadius: 16, padding: 14, marginBottom: 16,
-    borderWidth: 1, borderColor: COLORS.BORDER,
-  },
-  theirsHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  theirsTitle: { fontSize: 13.5, fontWeight: '800', color: COLORS.PLUM },
-  theirsHint: {
-    fontSize: 11.5, color: COLORS.TEXT_SECONDARY, marginTop: 3, lineHeight: 16,
-  },
-  theirChipOn: { backgroundColor: COLORS.BRAND, borderColor: COLORS.BRAND },
-  theirsMore: { fontSize: 11, color: COLORS.TEXT_MUTED, marginTop: 8, fontWeight: '600' },
   primaryBtn: {
     backgroundColor: COLORS.BRAND, borderRadius: 16, paddingVertical: 16,
     alignItems: 'center', marginTop: 16,
