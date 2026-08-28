@@ -11,7 +11,8 @@ import { DatePlanner, type DayPlan } from '@/components/DatePlanner';
 import { DateRoadmap } from '@/components/DateRoadmap';
 import { useDatesStore } from '@/store/dates';
 import {
-  fetchDatePlanState, submitDateAvailability, instantsToPlan, planToInstants, buildRoadmap,
+  fetchDatePlanState, submitDateAvailability, submitDateAvailabilityInstants,
+  instantsToPlan, planToInstants, buildRoadmap,
   type DatePlanState,
 } from '@/lib/date-plan-supabase';
 import { formatDate, formatTime } from '@/lib/format';
@@ -39,6 +40,18 @@ export default function DateDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
+  /**
+   * Times taken from THEIR list, kept as the exact instants they arrived as.
+   *
+   * Deliberately not folded into `draft`. A DayPlan is a local date plus
+   * HH:MM, and rebuilding an instant from that is lossy inside a repeated
+   * fall-back hour -- it resolves to the offset before the transition, so
+   * the time comes back an hour early. Their slots are authored on their
+   * device, possibly in another timezone, so they can land in my repeated
+   * hour even though my own picker never can. Keeping them separate means
+   * they are submitted exactly as received.
+   */
+  const [tapped, setTapped] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -46,6 +59,9 @@ export default function DateDetailScreen() {
       const st = await fetchDatePlanState(id);
       setPlan(st);
       if (st?.mySlots?.length) setDraft(instantsToPlan(st.mySlots));
+      // Whatever was tapped is now part of mySlots, so the local set has
+      // done its job. Leaving it would double-count on the next save.
+      setTapped([]);
     } catch {
       // Offline. The roadmap still renders from what the store knows.
     }
@@ -65,8 +81,10 @@ export default function DateDetailScreen() {
     if (!plan) return;
     setSaving(true);
     try {
-      const nextSlots = Array.from(new Set([...plan.mySlots, iso]));
-      await submitDateAvailability(id, instantsToPlan(nextSlots));
+      // Both sides are already exact instants -- mine came from the server,
+      // theirs from this list -- so they go straight back without passing
+      // through the wall-clock representation at all.
+      await submitDateAvailabilityInstants(id, [...plan.mySlots, iso]);
       await load();
     } catch (e: any) {
       Alert.alert('Could not send', e?.message || 'Please try again.');
@@ -92,9 +110,10 @@ export default function DateDetailScreen() {
     return !isNaN(ta) && ta === tb;
   };
 
-  /** Is this exact instant already in my draft? */
+  /** Have I already taken this one of theirs? */
   const draftHas = (iso: string) =>
-    planToInstants(draft).some((x) => sameInstant(x, iso));
+    tapped.some((x) => sameInstant(x, iso))
+    || planToInstants(draft).some((x) => sameInstant(x, iso));
 
   /**
    * Add or remove one of their times from my own selection.
@@ -105,18 +124,21 @@ export default function DateDetailScreen() {
    * actually contain it, which is the whole point of showing these.
    */
   const toggleTheirTime = (iso: string) => {
-    const mine = planToInstants(draft);
-    const next = mine.some((x) => sameInstant(x, iso))
-      ? mine.filter((x) => !sameInstant(x, iso))
-      : [...mine, iso];
-    setDraft(instantsToPlan(next));
+    setTapped((prev) =>
+      prev.some((x) => sameInstant(x, iso))
+        ? prev.filter((x) => !sameInstant(x, iso))
+        : [...prev, iso],
+    );
   };
 
   const save = async () => {
     if (!id) return;
     setSaving(true);
     try {
-      await submitDateAvailability(id, draft);
+      // The picker contributes wall-clock slots, which is what the member
+      // meant; the chips contribute exact instants, which is what they were
+      // handed. Merged as instants so neither is reinterpreted.
+      await submitDateAvailabilityInstants(id, [...planToInstants(draft), ...tapped]);
       setEditing(false);
       await load();
       Alert.alert(

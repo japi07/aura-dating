@@ -90,6 +90,45 @@ export async function fetchDatePlanState(dateId: string): Promise<DatePlanState 
   };
 }
 
+/**
+ * Send exact instants, with no wall-clock round trip.
+ *
+ * planToInstants/instantsToPlan are lossy in one specific place: an instant
+ * reduced to a local date + HH:MM and then re-parsed from a zoneless string
+ * resolves, inside a repeated fall-back hour, to the offset BEFORE the
+ * transition. On the morning the clocks go back, an instant round-tripped
+ * through DayPlan comes out an hour earlier than it went in.
+ *
+ * That is harmless for slots the picker itself authored -- its grid runs
+ * 11:00-22:30 and cannot land in a 01:00-02:00 repeated hour, and the user
+ * means the wall-clock time anyway. It is NOT harmless for an instant that
+ * arrived from the other person, who may be in another timezone entirely.
+ * Those must be submitted exactly as received.
+ */
+export async function submitDateAvailabilityInstants(
+  dateId: string,
+  instants: string[],
+): Promise<void> {
+  // Dedupe by instant rather than by string: the same moment arrives as
+  // "…T18:00:00.000Z" from toISOString and "…T18:00:00+00:00" from Postgres.
+  const seen = new Map<number, string>();
+  for (const iso of instants) {
+    const t = new Date(iso).getTime();
+    if (!isNaN(t) && !seen.has(t)) seen.set(t, iso);
+  }
+  const slots = Array.from(seen.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([, iso]) => iso);
+
+  if (slots.length === 0) throw new Error('Pick at least one time that works');
+
+  const { error } = await getSupabase().rpc('submit_date_availability', {
+    p_date_id: dateId,
+    p_slots: slots,
+  });
+  if (error) throw error;
+}
+
 export async function submitDateAvailability(dateId: string, plan: DayPlan[]): Promise<void> {
   const slots = planToInstants(plan);
   if (slots.length === 0) throw new Error('Pick at least one time that works');
