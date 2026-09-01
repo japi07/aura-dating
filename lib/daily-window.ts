@@ -39,16 +39,15 @@ const alwaysOpen =
 export const windowOverridden = alwaysOpen;
 
 /**
- * TESTING HOURS. The product design is 19:00-21:00 - two hours, everyone at
- * once, scarcity doing the work. Nine to nine is deliberately wide so a
- * handful of testers in one city can actually bump into each other, which a
- * two-hour slot makes almost impossible at this scale.
+ * The real hours: two, in the evening, everyone at once, scarcity doing the
+ * work. Widened to 9-21 for a stretch of testing and now back.
  *
- * Put this back to 19 before there are real members. The countdown, the
- * gating and the copy all read from these two numbers, so it is the only
- * edit needed.
+ * The countdown, every gate and all the copy read from these two numbers, so
+ * moving the window is this edit and one more: current_window_date() in
+ * 0016_tokens.sql hardcodes the closing hour to decide which night a ticket
+ * is for, and nothing fails loudly if the two disagree.
  */
-export const WINDOW_OPEN_HOUR = 9;
+export const WINDOW_OPEN_HOUR = 19;
 export const WINDOW_CLOSE_HOUR = 21;
 export const WINDOW_TIMEZONE = 'Europe/London';
 
@@ -181,4 +180,26 @@ export function formatShort(totalSeconds: number): string {
 /** The one-liner every gated screen shows when it turns someone away. */
 export function closedMessage(secondsUntilOpen: number): string {
   return `Tonight's window opens at ${WINDOW_LABEL} — ${formatShort(secondsUntilOpen)} to go.`;
+}
+
+/**
+ * The wall-clock time on THIS device that corresponds to the next opening.
+ *
+ * Notification triggers fire on the device's own clock, but the window is a
+ * London one. On a London phone these are the same number and this is a long
+ * way round to 19:00; on a phone anywhere else it is the difference between
+ * being told at seven in the evening and being told at some arbitrary hour.
+ *
+ * Recomputed on every launch rather than stored, because the answer moves an
+ * hour when either side crosses a daylight-saving boundary.
+ */
+export function localTimeOfNextOpen(now: Date = new Date()): { hour: number; minute: number } {
+  const state = getWindowState(now);
+  // While the window is open, nextChangeAt is the close; the next OPEN is a
+  // day later, and its local time is what we want either way.
+  const openAt = state.open
+    ? getWindowState(new Date(state.nextChangeAt.getTime() + 60_000)).nextChangeAt
+    : state.nextChangeAt;
+
+  return { hour: openAt.getHours(), minute: openAt.getMinutes() };
 }

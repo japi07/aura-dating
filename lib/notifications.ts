@@ -2,6 +2,7 @@
  * Notifications service: register push token + schedule local reminders.
  */
 import * as Notifications from 'expo-notifications';
+import { localTimeOfNextOpen } from './daily-window';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
@@ -104,27 +105,44 @@ export async function cancelReminders(reminderIds: string[]) {
   }
 }
 
-/** Schedule the daily 9 AM "your proposals are ready" ping */
-export async function scheduleDailyProposalReminder(): Promise<string | null> {
+/**
+ * Tell the phone when tonight's window opens.
+ *
+ * Replaces a 9 AM "your proposals are ready" ping left over from the model
+ * where one proposal arrived each morning. Nothing happens at 9 AM any more:
+ * everything now starts in a two-hour evening window, and a notification
+ * pointing at the wrong hour is worse than none.
+ *
+ * Scheduled locally rather than pushed. There is no scheduler in this
+ * project, and a daily trigger on the device needs no server, survives being
+ * offline, and cannot be late. The hour comes from the window itself, so the
+ * two can never drift apart.
+ */
+export async function scheduleWindowOpenReminder(): Promise<string | null> {
   try {
-    // Cancel existing daily reminder first
+    const { hour, minute } = localTimeOfNextOpen();
+
+    // Cancel any previous one first
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
     for (const n of scheduled) {
-      if (n.content.data && (n.content.data as any).type === 'daily-proposals') {
+      const t = (n.content.data as any)?.type;
+      // Clears the retired 9 AM reminder too, so anyone upgrading stops
+      // being pinged at an hour when nothing happens.
+      if (t === 'window-open' || t === 'daily-proposals') {
         await Notifications.cancelScheduledNotificationAsync(n.identifier);
       }
     }
     const id = await Notifications.scheduleNotificationAsync({
       content: {
-        title: 'Your proposals are ready ✨',
-        body: 'Curated by hand. Open Aura to see who wants to take you out today.',
-        data: { type: 'daily-proposals' },
+        title: "Tonight's window is open ✨",
+        body: 'Two hours to start something. A call, a blind date, or ask someone out.',
+        data: { type: 'window-open' },
         sound: true,
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour: 9,
-        minute: 0,
+        hour,
+        minute,
       },
     });
     return id;

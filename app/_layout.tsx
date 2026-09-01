@@ -15,7 +15,7 @@ import { useSubscriptionStore } from '@/store/subscription';
 import { COLORS } from '@/constants/colors';
 import {
   registerForPushNotifications,
-  scheduleDailyProposalReminder,
+  scheduleWindowOpenReminder,
 } from '@/lib/notifications';
 import { savePushTokenToServer } from '@/lib/profile-supabase';
 import { getSupabase } from '@/lib/supabase';
@@ -126,7 +126,7 @@ export default function RootLayout() {
       if (pushToken) {
         try { await savePushTokenToServer(pushToken); } catch { /* offline — retried next launch */ }
       }
-      await scheduleDailyProposalReminder();
+      await scheduleWindowOpenReminder();
       await hydrateSubscription();
       // Re-read our own profile from the server. A stale local copy of
       // gender / genderInterest silently filters the wrong people out of
