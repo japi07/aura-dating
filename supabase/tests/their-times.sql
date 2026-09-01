@@ -7,14 +7,38 @@ create temp table tt(line text);
 
 do $$
 declare
-  v_me   uuid := (select id from public.profiles where name = 'azpiazujavier');
-  v_them uuid := (select id from public.profiles where name = 'Humber');
+  v_me   uuid;   -- made below, so the suite
+  v_them uuid;   -- survives accounts being recreated
   v_date uuid;
   v_slot timestamptz := date_trunc('hour', now()) + interval '3 days' + interval '19 hours';
   v_r    record;
   v_ok   int := 0;
   v_bad  int := 0;
 begin
+  v_me := gen_random_uuid();
+  insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
+                          email_confirmed_at, created_at, updated_at)
+  values (v_me, '00000000-0000-0000-0000-000000000000', 'authenticated',
+          'authenticated', 'tt-a-' || left(v_me::text, 8) || '@example.test',
+          '', now(), now(), now());
+  insert into public.profiles (id, email, name, gender, gender_interest, age,
+                               verification_status)
+  values (v_me, 'tt-a-' || left(v_me::text, 8) || '@example.test',
+          'tt-a', 'male', 'female', 30, 'verified')
+  on conflict (id) do nothing;
+
+  v_them := gen_random_uuid();
+  insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
+                          email_confirmed_at, created_at, updated_at)
+  values (v_them, '00000000-0000-0000-0000-000000000000', 'authenticated',
+          'authenticated', 'tt-b-' || left(v_them::text, 8) || '@example.test',
+          '', now(), now(), now());
+  insert into public.profiles (id, email, name, gender, gender_interest, age,
+                               verification_status)
+  values (v_them, 'tt-b-' || left(v_them::text, 8) || '@example.test',
+          'tt-b', 'female', 'male', 30, 'verified')
+  on conflict (id) do nothing;
+
   -- a blind date between them that still needs a time
   select id into v_date from public.dates
    where mode = 'blind'
@@ -92,6 +116,9 @@ begin
   ---------------------------------------------- cleanup
   perform set_config('request.jwt.claims', json_build_object('sub', v_me)::text, true);
   delete from public.date_availability where date_id = v_date;
+  delete from public.dates where id = v_date;
+  delete from public.profiles where id in (v_me, v_them);
+  delete from auth.users where id in (v_me, v_them);
 
   insert into tt values ('------------------------------------------');
   insert into tt values (format('RESULT  %s passed, %s failed', v_ok, v_bad));

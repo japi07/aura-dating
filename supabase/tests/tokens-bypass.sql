@@ -8,14 +8,36 @@ grant insert, select on byp to authenticated;
 
 do $$
 declare
-  v_uid  uuid := 'a9980614-47dc-4936-a664-f92ec00d7179';
-  v_other uuid := 'c5fc2ae7-778b-40de-9bbc-5b67d8cbaac4';
+  v_uid  uuid;
+  v_other uuid;
   v_ok   int := 0;
   v_bad  int := 0;
   v_err  text;
   v_json jsonb;
   v_eid  uuid;
 begin
+  v_uid := gen_random_uuid();
+  insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
+                          email_confirmed_at, created_at, updated_at)
+  values (v_uid, '00000000-0000-0000-0000-000000000000', 'authenticated',
+          'authenticated', 'byp-a-' || left(v_uid::text, 8) || '@example.test',
+          '', now(), now(), now());
+  insert into public.profiles (id, email, name, gender, gender_interest, age)
+  values (v_uid, 'byp-a-' || left(v_uid::text, 8) || '@example.test',
+          'byp-a', 'male', 'female', 30)
+  on conflict (id) do nothing;
+
+  v_other := gen_random_uuid();
+  insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
+                          email_confirmed_at, created_at, updated_at)
+  values (v_other, '00000000-0000-0000-0000-000000000000', 'authenticated',
+          'authenticated', 'byp-b-' || left(v_other::text, 8) || '@example.test',
+          '', now(), now(), now());
+  insert into public.profiles (id, email, name, gender, gender_interest, age)
+  values (v_other, 'byp-b-' || left(v_other::text, 8) || '@example.test',
+          'byp-b', 'female', 'male', 30)
+  on conflict (id) do nothing;
+
   perform set_config('request.jwt.claims', json_build_object('sub', v_uid)::text, true);
 
   delete from public.token_ledger        where user_id = v_uid;
@@ -117,6 +139,8 @@ begin
   delete from public.token_ledger         where user_id = v_uid;
   delete from public.window_entries       where user_id = v_uid;
   delete from public.token_accounts       where user_id = v_uid;
+  delete from public.profiles where id in (v_uid, v_other);
+  delete from auth.users where id in (v_uid, v_other);
 
   insert into byp values ('------------------------------------------');
   insert into byp values (format('RESULT  %s safe, %s HOLES/BROKEN', v_ok, v_bad));

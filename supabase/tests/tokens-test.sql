@@ -4,7 +4,7 @@ create temp table tres(line text);
 
 do $$
 declare
-  v_uid  uuid := 'a9980614-47dc-4936-a664-f92ec00d7179';  -- throwaway test profile
+  v_uid  uuid;   -- a throwaway account, made below
   v_bal  int;
   v_bal2 int;
   v_eid  uuid;
@@ -14,6 +14,17 @@ declare
   v_err  text;
   v_sum  int;
 begin
+  v_uid := gen_random_uuid();
+  insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
+                          email_confirmed_at, created_at, updated_at)
+  values (v_uid, '00000000-0000-0000-0000-000000000000', 'authenticated',
+          'authenticated', 'tok-' || left(v_uid::text, 8) || '@example.test',
+          '', now(), now(), now());
+  insert into public.profiles (id, email, name, gender, gender_interest, age)
+  values (v_uid, 'tok-' || left(v_uid::text, 8) || '@example.test',
+          'tok', 'female', 'male', 30)
+  on conflict (id) do nothing;
+
   perform set_config('request.jwt.claims', json_build_object('sub', v_uid)::text, true);
 
   delete from public.token_ledger   where user_id = v_uid;
@@ -165,6 +176,8 @@ begin
   delete from public.token_ledger   where user_id = v_uid;
   delete from public.window_entries where user_id = v_uid;
   delete from public.token_accounts where user_id = v_uid;
+  delete from public.profiles where id = v_uid;
+  delete from auth.users where id = v_uid;
 
   insert into tres values ('------------------------------------------');
   insert into tres values (format('RESULT  %s passed, %s failed', v_ok, v_fail));

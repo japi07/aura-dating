@@ -64,12 +64,25 @@ export const MODE_EMOJI: Record<DateMode, string> = {
  */
 export async function initTokens(): Promise<number> {
   if (!supabaseEnabled) return 0;
+
+  // Sweeping stale entries and claiming the monthly allowance are both
+  // best-effort: worth doing on launch, never worth blocking on.
+  //
+  // The trial grant used to live here too, and that was the bug. On a new
+  // account this can run while the session is still settling, auth.uid() is
+  // null, the function raises, and a catch like this one turned a failed
+  // request into a balance of zero that looked like a fact. A trigger on the
+  // profile row grants it now, so this cannot cost anyone their first tokens.
   try {
     await getSupabase().rpc('ensure_token_account');
+  } catch {
+    // The account already exists, granted at signup.
+  }
+
+  try {
     const { data } = await getSupabase().rpc('claim_monthly_tokens');
     return (data as number | null) ?? 0;
   } catch {
-    // Offline, or signed out. The next launch will do it.
     return 0;
   }
 }
