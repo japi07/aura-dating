@@ -33,7 +33,8 @@
   </div>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script>
-    const SRC = 'https://cdn.jsdelivr.net/gh/japi07/aura-dating@main/legal/TERMS_OF_SERVICE.md';
+    // Same origin, for the reasons noted in privacy.html.
+    const SRC = './TERMS_OF_SERVICE.md';
     fetch(SRC).then(r => r.text()).then(md => {
       document.getElementById('doc').innerHTML = marked.parse(md);
     }).catch(() => {

@@ -33,7 +33,11 @@
   </div>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script>
-    const SRC = 'https://cdn.jsdelivr.net/gh/japi07/aura-dating@main/legal/PRIVACY_POLICY.md';
+    // Same origin as this page. It used to come from jsDelivr, which caches
+    // @main for hours -- a policy correction would not reach a reviewer the
+    // day it was made -- and rendered 'Unable to load' whenever the CDN was
+    // unreachable, which is a broken privacy policy from Apple's point of view.
+    const SRC = './PRIVACY_POLICY.md';
     fetch(SRC).then(r => r.text()).then(md => {
       document.getElementById('doc').innerHTML = marked.parse(md);
     }).catch(() => {
