@@ -184,3 +184,60 @@ export function describeReason(reason: string): string {
   }
   return reason;
 }
+
+/* ─── buying more ─── */
+
+export interface PackContents {
+  tokens: number;
+  label: string;
+}
+
+/**
+ * What each purchasable pack contains, by App Store product id.
+ *
+ * The store knows the price; the server knows the size. Keeping them apart
+ * means a price change never needs a release, and a pack size never has to be
+ * kept in step across two places.
+ */
+export async function fetchPackContents(): Promise<Record<string, PackContents>> {
+  if (!supabaseEnabled) return {};
+  try {
+    const { data, error } = await getSupabase()
+      .from('token_packs')
+      .select('product_id, tokens, label')
+      .eq('active', true)
+      .order('sort_order');
+    if (error) return {};
+    const out: Record<string, PackContents> = {};
+    for (const r of (data ?? []) as any[]) {
+      out[r.product_id] = { tokens: r.tokens, label: r.label };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Wait for the webhook to land the tokens.
+ *
+ * Apple returns from the purchase before RevenueCat has necessarily called us,
+ * so the balance is polled briefly rather than assumed. Returns the new balance
+ * if it moved, or null if it has not arrived yet — in which case the tokens are
+ * still coming and the wallet will show them on its next refresh.
+ */
+export async function awaitPurchasedTokens(
+  balanceBefore: number,
+  attempts = 6,
+): Promise<number | null> {
+  for (let i = 0; i < attempts; i++) {
+    await new Promise((r) => setTimeout(r, 1000 + i * 500));
+    try {
+      const st = await fetchTokenState();
+      if (st.balance > balanceBefore) return st.balance;
+    } catch {
+      // keep trying; a flaky read is not a failed purchase
+    }
+  }
+  return null;
+}

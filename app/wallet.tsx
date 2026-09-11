@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, TouchableOpacity, StatusBar,
-  ActivityIndicator, RefreshControl,
+  ActivityIndicator, RefreshControl, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -12,8 +12,10 @@ import { useTokensStore } from '@/store/tokens';
 import { useSubscriptionStore } from '@/store/subscription';
 import {
   fetchTokenHistory, describeReason, MODE_LABEL, MODE_EMOJI,
+  fetchPackContents, awaitPurchasedTokens,
   type LedgerRow, type DateMode,
 } from '@/lib/tokens-supabase';
+import { getTokenPacks, purchaseTokenPack, purchasesAvailable, type TokenPack } from '@/lib/purchases';
 import { formatDate } from '@/lib/format';
 
 const MODES: DateMode[] = ['call', 'blind', 'proposal'];
@@ -34,9 +36,22 @@ export default function WalletScreen() {
   const [history, setHistory] = useState<LedgerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [packs, setPacks] = useState<TokenPack[]>([]);
+  const [buying, setBuying] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try { setHistory(await fetchTokenHistory(40)); } catch { /* offline */ }
+
+    // What each pack contains comes from the server, what it costs comes
+    // from the App Store. Neither number is written down twice.
+    try {
+      const contents = await fetchPackContents();
+      if (Object.keys(contents).length > 0) {
+        setPacks(await getTokenPacks(contents));
+      }
+    } catch {
+      // No packs listed rather than a broken section.
+    }
   }, []);
 
   useEffect(() => {
@@ -46,6 +61,36 @@ export default function WalletScreen() {
       setLoading(false);
     })();
   }, [isHydrated, hydrate, load]);
+
+  const buy = async (pack: TokenPack) => {
+    setBuying(pack.productId);
+    const before = balance;
+    try {
+      await purchaseTokenPack(pack.rcPackage);
+
+      // Apple returns before RevenueCat has necessarily called our webhook,
+      // and the webhook is what actually grants against a verified receipt.
+      // So the new balance is waited for rather than assumed — and if it is
+      // slow, that is said plainly instead of showing a number that is wrong.
+      const settled = await awaitPurchasedTokens(before);
+      await refresh();
+
+      Alert.alert(
+        settled != null ? `${pack.tokens} tokens added` : 'Payment received',
+        settled != null
+          ? `Your balance is now ${settled}.`
+          : 'Your tokens are on their way and will appear here shortly.',
+      );
+    } catch (e: any) {
+      // A cancelled purchase is not an error worth an alert.
+      const cancelled = e?.userCancelled || /cancel/i.test(String(e?.message ?? ''));
+      if (!cancelled) {
+        Alert.alert('Could not complete the purchase', e?.message || 'Please try again.');
+      }
+    } finally {
+      setBuying(null);
+    }
+  };
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -129,6 +174,34 @@ export default function WalletScreen() {
               </View>
             ))}
           </View>
+
+          {packs.length > 0 && (
+            <>
+              <Text style={s.sectionLabel}>Buy more</Text>
+              <View style={s.card}>
+                {packs.map((pack, i) => (
+                  <TouchableOpacity
+                    key={pack.productId}
+                    style={[s.packRow, i === packs.length - 1 && { marginBottom: 0 }]}
+                    onPress={() => buy(pack)}
+                    disabled={buying !== null}
+                    activeOpacity={0.85}
+                  >
+                    <View style={s.packIcon}>
+                      <Ionicons name="diamond" size={15} color={COLORS.GOLD_DEEP} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.packTokens}>{pack.tokens} tokens</Text>
+                      <Text style={s.packLabel}>{pack.label}</Text>
+                    </View>
+                    {buying === pack.productId
+                      ? <ActivityIndicator color={COLORS.BRAND} />
+                      : <Text style={s.packPrice}>{pack.priceString}</Text>}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
 
           {!isGold && (
             <TouchableOpacity
@@ -231,6 +304,14 @@ const s = StyleSheet.create({
   },
   costText: { fontSize: 12, fontWeight: '800', color: COLORS.GOLD_DEEP },
 
+  packRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
+  packIcon: {
+    width: 34, height: 34, borderRadius: 12, backgroundColor: COLORS.GOLD_MUTED,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  packTokens: { fontSize: 15, fontWeight: '800', color: COLORS.TEXT },
+  packLabel: { fontSize: 12, color: COLORS.TEXT_MUTED, marginTop: 1 },
+  packPrice: { fontSize: 15, fontWeight: '800', color: COLORS.BRAND },
   upsell: {
     flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14,
     backgroundColor: COLORS.GOLD_MUTED, borderRadius: 16, padding: 15,

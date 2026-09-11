@@ -44,9 +44,12 @@ export default function SubscriptionScreen() {
 
   const subscribe = async () => {
     if (!canPurchase) {
+      // Never tell a reviewer the feature is unfinished -- that is a
+      // Guideline 2.1 rejection in one sentence. If the store is not
+      // reachable, say what the member can do about it.
       Alert.alert(
-        'Almost ready',
-        'Aura Gold purchasing turns on once the app is built with payments enabled and the subscriptions are live in the App Store. Everything else is wired and ready.',
+        'Not available right now',
+        'We could not reach the App Store. Check your connection and try again in a moment.',
         [{ text: 'OK' }],
       );
       return;

@@ -156,3 +156,73 @@ function mapPackageToPlan(pkg: any): PlanId | null {
   if (id.includes('MONTHLY') || id === '$RC_MONTHLY' || period === 'P1M') return 'monthly';
   return null;
 }
+
+/* ─── token packs ─── */
+
+export interface TokenPack {
+  productId: string;
+  tokens: number;
+  label: string;
+  /** Localised price string from the App Store, e.g. "£4.99" */
+  priceString: string;
+  /** The RevenueCat package, handed back to purchaseTokenPack */
+  rcPackage: any;
+}
+
+/**
+ * The consumable packs, priced by the App Store.
+ *
+ * How many tokens each product is worth lives in the database, not here —
+ * the app asks the store what a pack costs and asks the server what it
+ * contains, so neither number is duplicated in two places that can disagree.
+ */
+export async function getTokenPacks(
+  contents: Record<string, { tokens: number; label: string }>,
+): Promise<TokenPack[]> {
+  if (!purchasesAvailable || !_configured) return [];
+  try {
+    const offerings = await Purchases.getOfferings();
+    // A dedicated offering keeps packs out of the subscription paywall; fall
+    // back to scanning all of them so a misnamed offering is not fatal.
+    const all = [
+      ...(offerings?.all?.tokens?.availablePackages ?? []),
+      ...Object.values(offerings?.all ?? {}).flatMap(
+        (o: any) => o?.availablePackages ?? [],
+      ),
+    ];
+
+    const seen = new Set<string>();
+    const out: TokenPack[] = [];
+    for (const pkg of all) {
+      const id = pkg?.product?.identifier;
+      const known = id ? contents[id] : undefined;
+      if (!id || !known || seen.has(id)) continue;
+      seen.add(id);
+      out.push({
+        productId: id,
+        tokens: known.tokens,
+        label: known.label,
+        priceString: pkg.product?.priceString ?? '',
+        rcPackage: pkg,
+      });
+    }
+    return out.sort((a, b) => a.tokens - b.tokens);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Buy a pack.
+ *
+ * Returns once Apple has taken the payment. It does NOT return the new
+ * balance, and deliberately so: the tokens are granted by the RevenueCat
+ * webhook against a receipt Apple has verified, so the authoritative number
+ * comes from refreshing the wallet a moment later, never from this call.
+ */
+export async function purchaseTokenPack(rcPackage: any): Promise<void> {
+  if (!purchasesAvailable || !_configured) {
+    throw new Error('Purchasing is not available in this build');
+  }
+  await Purchases.purchasePackage(rcPackage);
+}

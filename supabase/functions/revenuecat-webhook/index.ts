@@ -58,6 +58,48 @@ Deno.serve(async (req: Request) => {
     if (appUserId.startsWith('$RCAnonymousID')) {
       return json({ ok: true, note: 'Anonymous id; ignored' });
     }
+
+    // Needed by both branches below, so it is created before either.
+    const admin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
+
+    // ── Consumable token packs ──
+    //
+    // These arrive as NON_RENEWING_PURCHASE, which the entitlement logic
+    // below counts as "grants Gold" — so without this branch, buying five
+    // tokens would quietly hand someone a subscription. Routed here first,
+    // and returned from, so a pack never touches is_gold at all.
+    //
+    // The grant is keyed to the transaction id: RevenueCat redelivers on
+    // any non-2xx, and a redelivery is the system working, not a reason to
+    // pay somebody twice.
+    const productId: string | undefined =
+      event?.product_id ?? event?.product_identifier;
+    const txnId: string | undefined =
+      event?.transaction_id ?? event?.original_transaction_id ?? event?.id;
+
+    if (productId && txnId) {
+      const { data: pack } = await admin
+        .from('token_packs')
+        .select('tokens')
+        .eq('product_id', productId)
+        .eq('active', true)
+        .maybeSingle();
+
+      if (pack) {
+        const { data: granted, error: grantErr } = await admin.rpc(
+          'grant_tokens_from_purchase',
+          { p_user: appUserId, p_product_id: productId, p_transaction_id: txnId },
+        );
+        if (grantErr) {
+          // Non-2xx so RevenueCat retries rather than dropping the purchase.
+          return json({ error: grantErr.message }, 500);
+        }
+        return json({ ok: true, tokensGranted: granted ?? 0, productId });
+      }
+    }
     // If the event names entitlements and ours isn't among them, ignore it
     if (entitlementIds && entitlementIds.length > 0 && !entitlementIds.includes(ENTITLEMENT)) {
       return json({ ok: true, note: 'Different entitlement; ignored' });
@@ -75,10 +117,6 @@ Deno.serve(async (req: Request) => {
     }
     const goldExpiresAt = expirationMs != null ? new Date(expirationMs).toISOString() : null;
 
-    const admin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    );
     const { error } = await admin
       .from('profiles')
       .update({ is_gold: isGold, gold_expires_at: goldExpiresAt })

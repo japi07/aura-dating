@@ -67,7 +67,7 @@ export default function PayScreen() {
           'You have run out for now. Tokens come with a subscription, or you can buy more.',
           [
             { text: 'Not now', style: 'cancel' },
-            { text: 'See plans', onPress: () => router.push('/settings/subscription') },
+            { text: 'See plans', onPress: () => router.push('/wallet') },
           ],
         );
       } else {
@@ -170,7 +170,7 @@ export default function PayScreen() {
               </View>
               <TouchableOpacity
                 style={s.primaryBtn}
-                onPress={() => router.push('/settings/subscription')}
+                onPress={() => router.push('/wallet')}
                 activeOpacity={0.88}
               >
                 <Ionicons name="diamond-outline" size={17} color="#fff" />
