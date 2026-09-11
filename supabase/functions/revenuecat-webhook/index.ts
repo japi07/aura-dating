@@ -34,13 +34,22 @@ Deno.serve(async (req: Request) => {
     return new Response('Method not allowed', { status: 405 });
   }
 
-  // Shared-secret auth — must match the header configured in RevenueCat
+  // Shared-secret auth — must match the Authorization header configured on
+  // the webhook in RevenueCat.
+  //
+  // Required, not optional. This used to authenticate only when a secret
+  // happened to be set, and none was: the endpoint is public, verify_jwt is
+  // off, and an anonymous POST was confirmed to grant 40 tokens and could
+  // equally have set is_gold on any account. A webhook that cannot tell who
+  // is calling has to refuse rather than assume.
   const expectedSecret = Deno.env.get('REVENUECAT_WEBHOOK_SECRET');
-  if (expectedSecret) {
-    const got = req.headers.get('Authorization') ?? '';
-    if (got !== expectedSecret) {
-      return new Response('Unauthorized', { status: 401 });
-    }
+  if (!expectedSecret) {
+    // Refusing loudly beats quietly accepting forged purchases. RevenueCat
+    // retries on 5xx, so a real event is not lost while this is fixed.
+    return new Response('Webhook secret not configured', { status: 503 });
+  }
+  if ((req.headers.get('Authorization') ?? '') !== expectedSecret) {
+    return new Response('Unauthorized', { status: 401 });
   }
 
   try {

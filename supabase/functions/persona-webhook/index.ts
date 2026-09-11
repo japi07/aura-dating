@@ -28,12 +28,17 @@ Deno.serve(async (req: Request) => {
 
   const rawBody = await req.text();
 
-  // Verify Persona's HMAC signature when a secret is configured
+  // Verify Persona's HMAC signature. Required, not conditional.
+  //
+  // Without it this endpoint will mark any account verified for anyone who
+  // can POST to it — which is the whole safety promise of the product, so
+  // it fails closed. Persona retries on 5xx.
   const secret = Deno.env.get('PERSONA_WEBHOOK_SECRET');
-  if (secret) {
-    const ok = await verifyPersonaSignature(req.headers.get('Persona-Signature'), rawBody, secret);
-    if (!ok) return json({ error: 'Invalid signature' }, 401);
+  if (!secret) {
+    return json({ error: 'Webhook secret not configured' }, 503);
   }
+  const ok = await verifyPersonaSignature(req.headers.get('Persona-Signature'), rawBody, secret);
+  if (!ok) return json({ error: 'Invalid signature' }, 401);
 
   try {
     const body = JSON.parse(rawBody);
