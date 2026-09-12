@@ -33,6 +33,22 @@ const TYPE_CONFIG: Record<string, { bg: string; text: string; icon: string }> = 
 
 const CATEGORIES: ('All' | LondonEvent['type'])[] = ['All', 'Social', 'Activity', 'Culture', 'Dinner', 'Workshop'];
 
+/**
+ * Events are not live yet.
+ *
+ * The seeded events were invented, and worse, they hung invented nights off
+ * real London venues — The Book Club, The Yard Theatre — with those venues'
+ * real addresses. A member could have turned up to a warehouse in Hackney
+ * Wick for a party nobody was throwing.
+ *
+ * So the tab says so plainly instead. This also means the screen does not
+ * depend on the database being clean: leftover rows stay invisible.
+ *
+ * Flip to true once there is a first real event, and delete the seeded rows
+ * (supabase/clear_seeded_events.sql).
+ */
+const EVENTS_LIVE = false;
+
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 }
@@ -178,6 +194,7 @@ export default function EventsScreen() {
   };
 
   useEffect(() => {
+    if (!EVENTS_LIVE) { setLoading(false); return; }
     (async () => { await load(); setLoading(false); })();
   }, []);
 
@@ -240,6 +257,49 @@ export default function EventsScreen() {
   const directions = (e: LondonEvent) => {
     openInMaps({ name: e.venue, address: e.address, postcode: e.postcode, lat: e.lat, lng: e.lng });
   };
+
+  if (!EVENTS_LIVE) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle="dark-content" />
+
+        <View style={styles.header}>
+          <Text style={styles.title}>Events</Text>
+        </View>
+
+        <View style={styles.soon}>
+          <View style={styles.soonIcon}>
+            <Ionicons name="calendar-outline" size={40} color={COLORS.BRAND} />
+          </View>
+
+          <Text style={styles.soonBadge}>COMING SOON</Text>
+          <Text style={styles.soonTitle}>Group nights out, soon</Text>
+
+          <Text style={styles.soonBody}>
+            We're lining up supper clubs, life drawing and warehouse parties across
+            London, with an Aura table so you always have people to talk to.
+          </Text>
+          <Text style={styles.soonBody}>
+            Nothing is listed here yet because nothing is booked yet. We'd rather
+            show you an empty tab than an evening that is not really happening.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.soonCta}
+            onPress={() => router.replace('/(tabs)/connections')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.soonCtaText}>See my dates</Text>
+            <Ionicons name="arrow-forward" size={16} color="#fff" />
+          </TouchableOpacity>
+
+          <Text style={styles.soonFoot}>
+            One-to-one dates carry on as normal in the Dates tab.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -529,6 +589,26 @@ const styles = StyleSheet.create({
   progressFill: { height: '100%', borderRadius: 2 },
   progressLabel: { fontSize: 11, fontWeight: '700', color: COLORS.TEXT_MUTED, textAlign: 'right' },
 
+  soon: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 34, paddingBottom: 60 },
+  soonIcon: {
+    width: 84, height: 84, borderRadius: 42, backgroundColor: COLORS.BRAND_MUTED,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 22,
+  },
+  soonBadge: {
+    fontSize: 11, fontWeight: '800', letterSpacing: 1.4, color: COLORS.BRAND,
+    marginBottom: 10,
+  },
+  soonTitle: { fontSize: 22, fontWeight: '800', color: COLORS.TEXT, textAlign: 'center', marginBottom: 14 },
+  soonBody: {
+    fontSize: 14.5, color: COLORS.TEXT_MUTED, textAlign: 'center', lineHeight: 22,
+    marginBottom: 14,
+  },
+  soonCta: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10,
+    backgroundColor: COLORS.BRAND, paddingVertical: 13, paddingHorizontal: 24, borderRadius: 26,
+  },
+  soonCtaText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  soonFoot: { fontSize: 12.5, color: COLORS.TEXT_MUTED, textAlign: 'center', marginTop: 18 },
   empty: { alignItems: 'center', paddingTop: 48, paddingHorizontal: 32 },
   emptyIcon: {
     width: 80, height: 80, borderRadius: 26, backgroundColor: COLORS.BRAND_MUTED,

@@ -1,3 +1,14 @@
+-- DO NOT RUN. Kept for reference only.
+--
+-- These six events are invented, but the venues, addresses and postcodes are
+-- real London businesses. Seeding them told members that The Book Club was
+-- running a talks night and that Colour Factory was throwing a party, which
+-- neither was. Use clear_seeded_events.sql to remove them if they were ever
+-- inserted, and keep the Events tab behind EVENTS_LIVE until a real evening
+-- is actually booked.
+--
+-- Original header follows.
+--
 -- Sample London events so the Events tab has real content to browse.
 -- Run in the Supabase SQL Editor. Re-running adds duplicates, so run once
 -- (or delete first with: delete from public.events;).
