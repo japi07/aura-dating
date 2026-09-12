@@ -35,15 +35,16 @@ export default function TabsLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="events"
-        options={{
-          title: 'Events',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'calendar' : 'calendar-outline'} color={color} />
-          ),
-        }}
-      />
+      {/*
+        Events is hidden, not deleted.
+
+        There is nothing real to list yet — the seeded evenings were invented,
+        and a tab whose whole content is "coming soon" is the shape App Review
+        reads as an unfinished app under guideline 2.1. The screen itself still
+        exists and is still reachable, so putting it back is one line here plus
+        EVENTS_LIVE in events.tsx.
+      */}
+      <Tabs.Screen name="events" options={{ href: null }} />
       <Tabs.Screen
         name="connections"
         options={{

@@ -81,6 +81,21 @@ public URLs (Apple + the in-app links need them).
 
 ---
 
+## 6. Events — switched off for launch
+
+- ✅ The tab is hidden from the bar (`href: null` in `app/(tabs)/_layout.tsx`)
+  and the screen is gated behind `EVENTS_LIVE` in `app/(tabs)/events.tsx`.
+  Neither is deleted, so turning it back on is two one-line changes.
+- 👤 Run `supabase/clear_seeded_events.sql` to drop the six invented events.
+  They named real venues at real addresses, so they should not sit in the
+  table waiting for someone to flip a flag.
+- 👤 Decide what the tab comes back with. The eight Viator experiences are
+  genuinely bookable any day and carry our affiliate id, so they are real
+  revenue rather than filler — only their suggested date is invented. Own
+  Aura evenings need a venue that has actually agreed to host one.
+
+---
+
 ## 6. App Store listing + TestFlight
 
 - 👤 In App Store Connect, fill in: app name, subtitle, description, keywords,
