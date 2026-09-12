@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#C8175E"
+      "backgroundColor": "#8E0E40"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -37,7 +37,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#C8175E"
+        "backgroundColor": "#8E0E40"
       },
       "package": "com.auradating.ios",
       "permissions": [

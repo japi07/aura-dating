@@ -51,7 +51,7 @@ class BootErrorBoundary extends React.Component<{ children: React.ReactNode }, {
 /** Branded boot screen — shown instead of a blank white screen while stores hydrate. */
 function BootSplash() {
   return (
-    <View style={{ flex: 1, backgroundColor: '#C8175E', justifyContent: 'center', alignItems: 'center' }}>
+    <View style={{ flex: 1, backgroundColor: '#8E0E40', justifyContent: 'center', alignItems: 'center' }}>
       <Text style={{ fontSize: 40, fontWeight: '800', color: '#fff', letterSpacing: -1, marginBottom: 18 }}>aura</Text>
       <ActivityIndicator color="#fff" />
     </View>
