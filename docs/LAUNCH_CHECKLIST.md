@@ -69,8 +69,15 @@ public URLs (Apple + the in-app links need them).
 
 ## 5. Real support email
 
-- 👤 Decide the address (e.g. a Gmail, or `hello@yourdomain`)
-- 🤖 Swap the placeholder `support@auradating.app` in the Help screen
+- ✅ Decided: `azpiazujavier@gmail.com` for now. The Help screen and the
+  published support page both point there, so the address Apple sees is one
+  that actually receives mail.
+- 👤 Worth doing eventually: a branded address. Zoho Mail is already set up
+  on `auradating.app` — MX, SPF, DKIM and domain verification are all live —
+  so an alias is a five-minute job and costs nothing. Two caveats when you
+  do: the account sits in the India datacentre, which the privacy policy
+  does not disclose and which Zoho cannot move afterwards; and the free plan
+  has no IMAP, so it is webmail and the Zoho app only.
 
 ---
 
