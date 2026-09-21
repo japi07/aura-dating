@@ -21,10 +21,22 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+// Also screens text (bios, proposal messages, thread captions) when called
+// with { text }. The database refuses a fixed list of slurs on its own; this
+// is the layer that understands harassment and threats a word list cannot.
+
 // Categories that should block a dating-app profile image
 const BLOCK_CATEGORIES = [
   'sexual', 'sexual/minors', 'violence', 'violence/graphic',
   'hate', 'hate/threatening', 'harassment/threatening', 'self-harm',
+];
+
+// Text is held to a stricter line than photos: plain harassment counts,
+// because in a message it is aimed at a person.
+const TEXT_BLOCK_CATEGORIES = [
+  'sexual', 'sexual/minors', 'hate', 'hate/threatening',
+  'harassment', 'harassment/threatening',
+  'self-harm/intent', 'self-harm/instructions', 'violence/graphic',
 ];
 
 Deno.serve(async (req: Request) => {
@@ -34,10 +46,11 @@ Deno.serve(async (req: Request) => {
     const apiKey = Deno.env.get('OPENAI_API_KEY');
     // Accepts either a hosted URL, or base64 (used for video frames extracted
     // on-device, so we never upload a frame just to check it).
-    const { imageUrl, imageBase64, mimeType } = await req.json();
+    const { imageUrl, imageBase64, mimeType, text } = await req.json();
+    const isText = typeof text === 'string' && text.trim().length > 0;
     const image = imageUrl
       || (imageBase64 ? `data:${mimeType || 'image/jpeg'};base64,${imageBase64}` : null);
-    if (!image) return json({ error: 'imageUrl or imageBase64 required' }, 400);
+    if (!image && !isText) return json({ error: 'imageUrl, imageBase64 or text required' }, 400);
 
     // Not configured yet — allow, so uploads keep working until moderation is on
     if (!apiKey) return json({ flagged: false, configured: false });
@@ -47,7 +60,9 @@ Deno.serve(async (req: Request) => {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: 'omni-moderation-latest',
-        input: [{ type: 'image_url', image_url: { url: image } }],
+        input: isText
+          ? String(text).slice(0, 4000)
+          : [{ type: 'image_url', image_url: { url: image } }],
       }),
     });
 
@@ -61,7 +76,7 @@ Deno.serve(async (req: Request) => {
     const data = await res.json();
     const result = data?.results?.[0];
     const categories = result?.categories ?? {};
-    const flaggedCats = BLOCK_CATEGORIES.filter((c) => categories[c]);
+    const flaggedCats = (isText ? TEXT_BLOCK_CATEGORIES : BLOCK_CATEGORIES).filter((c) => categories[c]);
     const flagged = flaggedCats.length > 0;
 
     return json({ flagged, configured: true, categories: flaggedCats });

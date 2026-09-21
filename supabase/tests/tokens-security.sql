@@ -1,15 +1,26 @@
 -- Can a signed-in member mint themselves tokens with nothing but the anon key?
 -- Runs as the `authenticated` role, which is what a JWT-bearing client gets.
+-- One transaction, rolled back at the end, with its own throwaway member.
+-- It used to point at a hardcoded user id that no longer exists, and so
+-- failed on a foreign key before testing anything.
+begin;
+
 create temp table sec(line text);
 grant insert, select on sec to authenticated;
 
 do $$
 declare
-  v_uid uuid := 'a9980614-47dc-4936-a664-f92ec00d7179';
+  v_uid uuid := gen_random_uuid();
   v_ok  int := 0;
   v_bad int := 0;
   v_err text;
 begin
+  -- A trigger on auth.users creates the profile, and one on profiles opens
+  -- the token account: exactly what a real sign-up gets.
+  insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
+                          email_confirmed_at, created_at, updated_at)
+  values (v_uid, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+          'tokens-security-' || left(v_uid::text, 8) || '@example.test', '', now(), now(), now());
   perform set_config('request.jwt.claims', json_build_object('sub', v_uid)::text, true);
   delete from public.token_ledger   where user_id = v_uid;
   delete from public.window_entries where user_id = v_uid;
@@ -117,3 +128,5 @@ begin
 end $$;
 
 select line from sec;
+
+rollback;

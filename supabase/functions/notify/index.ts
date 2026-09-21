@@ -4,6 +4,12 @@
 // (supabase.functions.invoke('notify', { body: { proposalId, event } }))
 // right after it creates or accepts a proposal.
 //
+// Also { event: 'report' }: after a member files a safety report, every admin
+// is told there is something to review. Apple requires reports to be acted on
+// within 24 hours, and a queue nobody knows has filled cannot meet that. Only
+// someone who has just filed a report can trigger it, so it cannot be used to
+// spam the admins, and it carries no detail about who reported whom.
+//
 // Runs with the service role so it can read the *recipient's* push tokens,
 // which RLS otherwise hides from everyone but the owner. We still verify the
 // caller is actually a party to the proposal before sending anything.
@@ -31,7 +37,7 @@ Deno.serve(async (req: Request) => {
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
     const { proposalId, event } = await req.json();
-    if (!proposalId || !['new', 'accepted'].includes(event)) {
+    if (event !== 'report' && (!proposalId || !['new', 'accepted'].includes(event))) {
       return json({ error: 'Bad request' }, 400);
     }
 
@@ -44,8 +50,46 @@ Deno.serve(async (req: Request) => {
     const callerId = userData?.user?.id;
     if (!callerId) return json({ error: 'Not authenticated' }, 401);
 
-    // Load the proposal with both parties' names (service role bypasses RLS)
     const admin = createClient(supabaseUrl, serviceRoleKey);
+
+    if (event === 'report') {
+      const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      const { count } = await admin
+        .from('reports')
+        .select('id', { count: 'exact', head: true })
+        .eq('reporter_id', callerId)
+        .gte('created_at', since);
+      if (!count) return json({ error: 'Forbidden' }, 403);
+
+      const { data: admins } = await admin.from('profiles').select('id').eq('is_admin', true);
+      const adminIds = (admins ?? []).map((a: any) => a.id);
+      if (adminIds.length === 0) return json({ sent: 0, note: 'No admins' }, 200);
+
+      const { data: adminTokens } = await admin
+        .from('push_tokens')
+        .select('expo_push_token')
+        .in('user_id', adminIds);
+      const alerts = (adminTokens ?? [])
+        .map((t: any) => t.expo_push_token)
+        .filter((t: string) => !!t)
+        .map((to: string) => ({
+          to,
+          sound: 'default',
+          title: 'New safety report',
+          body: 'A member has reported someone. Review it within 24 hours.',
+          data: { event: 'report' },
+        }));
+      if (alerts.length === 0) return json({ sent: 0, note: 'No admin push tokens' }, 200);
+
+      const res = await fetch(EXPO_PUSH_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(alerts),
+      });
+      return json({ sent: alerts.length, expo: await res.json() }, 200);
+    }
+
+    // Load the proposal with both parties' names (service role bypasses RLS)
     const { data: proposal, error: pErr } = await admin
       .from('proposals')
       .select('id, sender_id, recipient_id, venue_name, ' +
