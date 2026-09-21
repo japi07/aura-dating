@@ -9,6 +9,7 @@
 import { getSupabase, supabaseEnabled, BUCKETS } from './supabase';
 import { uploadLocalFile, isLocalUri } from './storage-upload';
 import { getSessionUserId } from './proposals-supabase';
+import { assertCleanText, friendlyError } from './safety-supabase';
 
 /* ─── profile ─── */
 
@@ -75,6 +76,8 @@ export async function uploadMyProfilePhoto(localUri: string): Promise<string> {
  * resulting public URL is returned (so the caller can update local state).
  */
 export async function updateMyProfile(patch: ProfilePatch): Promise<{ photoUrl?: string; photos?: string[] }> {
+  // Name and bio are shown to everyone; screen them before anything is saved.
+  await assertCleanText(patch.name, patch.bio);
   const supabase = getSupabase();
   const uid = await getSessionUserId();
   if (!uid) throw new Error('You need to be signed in to update your profile');
@@ -114,7 +117,7 @@ export async function updateMyProfile(patch: ProfilePatch): Promise<{ photoUrl?:
 
   if (Object.keys(row).length > 0) {
     const { error } = await supabase.from('profiles').update(row).eq('id', uid);
-    if (error) throw error;
+    if (error) throw new Error(friendlyError(error));
   }
   return { photoUrl: photos ? photos[0] : photoUrl, photos };
 }

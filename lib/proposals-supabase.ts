@@ -5,6 +5,7 @@
  * and the Postgres schema in supabase/schema.sql. All calls run under the
  * signed-in user's session, so RLS guarantees users only see their own rows.
  */
+import { assertCleanText, friendlyError } from './safety-supabase';
 import { getSupabase, supabaseEnabled, BUCKETS } from './supabase';
 import { uploadLocalFile, isLocalUri, remoteOnly } from './storage-upload';
 import { moderateVideo, VIDEO_REJECTED_MESSAGE } from './video-moderation';
@@ -148,6 +149,8 @@ export async function createProposalOnServer(input: {
   const supabase = getSupabase();
   const uid = await getSessionUserId();
   if (!uid) throw new Error('You need to be signed in to send a proposal');
+  // Screened before the video is uploaded, not after.
+  await assertCleanText(input.message);
 
   // Resolve the recipient — they must already have an Aura account
   const email = input.recipientEmail.toLowerCase().trim();
@@ -217,7 +220,7 @@ export async function createProposalOnServer(input: {
       sender:profiles!proposals_sender_id_fkey(${PROFILE_COLS}),
       recipient:profiles!proposals_recipient_id_fkey(${PROFILE_COLS})`)
     .single();
-  if (error) throw error;
+  if (error) throw new Error(friendlyError(error));
   // Ping the recipient that a new proposal arrived (non-blocking)
   notifyProposalEvent(data.id, 'new');
   return rowToProposal(data);

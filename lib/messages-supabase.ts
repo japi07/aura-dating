@@ -10,6 +10,7 @@ import { uploadLocalFile, isLocalUri, remoteOnly } from './storage-upload';
 import { getSessionUserId } from './proposals-supabase';
 import { moderateVideo, VIDEO_REJECTED_MESSAGE } from './video-moderation';
 import { moderateImageUrl } from './profile-supabase';
+import { assertCleanText, friendlyError } from './safety-supabase';
 
 export interface ThreadMessage {
   id: string;
@@ -73,6 +74,8 @@ export async function sendThreadMessage(args: {
   const supabase = getSupabase();
   const uid = await getSessionUserId();
   if (!uid) throw new Error('You need to be signed in');
+  // Before any upload: no point storing a video whose caption we'll refuse.
+  await assertCleanText(args.caption);
   if (!args.videoUri && !args.attachment) {
     throw new Error('Record a video or attach a file to send');
   }
@@ -125,5 +128,5 @@ export async function sendThreadMessage(args: {
     attachment_name: args.attachment?.name ?? null,
     attachment_type: args.attachment?.mimeType ?? null,
   });
-  if (error) throw error;
+  if (error) throw new Error(friendlyError(error));
 }

@@ -11,6 +11,7 @@ import { type DayPlan } from '@/components/DatePlanner';
 import { SharedAvailability } from '@/components/SharedAvailability';
 import { DateRoadmap } from '@/components/DateRoadmap';
 import { useDatesStore } from '@/store/dates';
+import { SafetySheet } from '@/components/SafetySheet';
 import {
   fetchDatePlanState, submitDateAvailability, submitDateAvailabilityInstants,
   instantsToPlan, planToInstants, buildRoadmap,
@@ -35,6 +36,17 @@ export default function DateDetailScreen() {
 
   const dates = useDatesStore((st) => st.dates);
   const date = useMemo(() => dates.find((d) => d.id === id), [dates, id]);
+  const [safetyOpen, setSafetyOpen] = useState(false);
+  const refreshDates = useDatesStore((st) => st.refreshDates);
+  // Dates created offline live only on this device; nothing to report against.
+  const reportable = !!id && !String(id).startsWith('date_');
+  // Reported by date id, so a blind date stays blind: the server resolves who.
+  const safetyName = date?.mode === 'blind' ? 'your date' : (date?.with.name?.split(' ')[0] || 'your date');
+
+  const afterSafety = async () => {
+    await refreshDates().catch(() => {});
+    router.canGoBack() ? router.back() : router.replace('/(tabs)/connections');
+  };
 
   const [plan, setPlan] = useState<DatePlanState | null>(null);
   const [draft, setDraft] = useState<DayPlan[]>([]);
@@ -164,8 +176,24 @@ export default function DateDetailScreen() {
           <Ionicons name="chevron-back" size={26} color={COLORS.TEXT} />
         </TouchableOpacity>
         <Text style={s.title}>Your date</Text>
-        <View style={{ width: 40 }} />
+        {reportable ? (
+          <TouchableOpacity
+            style={s.backBtn}
+            onPress={() => setSafetyOpen(true)}
+            accessibilityLabel={`Report or block ${safetyName}`}
+          >
+            <Ionicons name="ellipsis-horizontal" size={22} color={COLORS.TEXT} />
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 40 }} />
+        )}
       </View>
+
+      <SafetySheet
+        target={safetyOpen ? { name: safetyName, dateId: String(id) } : null}
+        onClose={() => setSafetyOpen(false)}
+        onDone={afterSafety}
+      />
 
       {loading ? (
         <View style={s.centered}><ActivityIndicator color={COLORS.BRAND} /></View>

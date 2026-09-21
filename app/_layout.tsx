@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, ActivityIndicator, ScrollView, AppState } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -19,6 +20,8 @@ import {
 } from '@/lib/notifications';
 import { savePushTokenToServer } from '@/lib/profile-supabase';
 import { getSupabase } from '@/lib/supabase';
+import { fetchMySafetyState, termsCurrent, TERMS_VERSION, type SafetyState } from '@/lib/safety-supabase';
+import { TermsGate, AccountSuspended } from '@/components/TermsGate';
 
 /**
  * Catches any render-time crash and shows the actual error instead of a
@@ -59,7 +62,13 @@ function BootSplash() {
 }
 
 export default function RootLayout() {
-  const { token, user, hydrate, setToken, setUser } = useAuthStore();
+  const { token, user, hydrate, setToken, setUser, logout } = useAuthStore();
+  /**
+   * Terms accepted? Account suspended? undefined while we don't know yet.
+   * Asked of the server on every launch and every return to the foreground,
+   * so a removal takes effect without waiting for a restart.
+   */
+  const [safety, setSafety] = useState<SafetyState | null | undefined>(undefined);
   const hydrateProposals = useProposalsStore((s) => s.hydrate);
   const hydrateDates = useDatesStore((s) => s.hydrate);
   const hydrateSettings = useSettingsStore((s) => s.hydrate);
@@ -138,10 +147,84 @@ export default function RootLayout() {
     })();
   }, [token, user]);
 
+  const userId = user?.id;
+  useEffect(() => {
+    if (!token || !userId) { setSafety(undefined); return; }
+    let active = true;
+    const cacheKey = `aura.termsAccepted.${userId}`;
+
+    const check = async () => {
+      // A member who already agreed on this phone gets straight in; the
+      // server's answer still arrives and wins, which is how a ban lands.
+      try {
+        if ((await AsyncStorage.getItem(cacheKey)) === TERMS_VERSION) {
+          if (active) setSafety((prev) => prev ?? { termsAcceptedAt: 'cached', termsVersion: TERMS_VERSION, bannedAt: null });
+        }
+      } catch { /* no cache */ }
+
+      try {
+        const state = await Promise.race([
+          fetchMySafetyState(),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
+        ]);
+        if (!active) return;
+        setSafety(state ?? { termsAcceptedAt: null, termsVersion: null, bannedAt: null });
+        if (termsCurrent(state) && !state?.bannedAt) AsyncStorage.setItem(cacheKey, TERMS_VERSION).catch(() => {});
+        else AsyncStorage.removeItem(cacheKey).catch(() => {});
+      } catch {
+        // Offline with nothing cached: ask. Agreeing needs the network anyway,
+        // and the gate says so if it fails.
+        if (active) setSafety((prev) => prev ?? { termsAcceptedAt: null, termsVersion: null, bannedAt: null });
+      }
+    };
+
+    check();
+    const sub = AppState.addEventListener('change', (next) => { if (next === 'active') check(); });
+    return () => { active = false; sub.remove(); };
+  }, [token, userId]);
+
+  const signOutFromGate = async () => {
+    await logout();
+    try {
+      useProposalsStore.setState({ proposals: [], decisions: {} } as any);
+      useDatesStore.setState({ dates: [] } as any);
+    } catch {}
+  };
+
   if (!isReady) return <BootSplash />;
 
   const isLoggedIn = !!token && !!user;
   const profileComplete = user?.profileComplete ?? false;
+
+  // Before anything else a signed-in member sees, onboarding included: the
+  // suspension notice, or the terms (with 18+) if they haven't agreed yet.
+  if (isLoggedIn) {
+    if (safety === undefined) return <BootSplash />;
+    if (safety?.bannedAt) {
+      return (
+        <SafeAreaProvider>
+          <StatusBar style="dark" backgroundColor={COLORS.BG} />
+          <AccountSuspended onSignOut={signOutFromGate} />
+        </SafeAreaProvider>
+      );
+    }
+    if (!termsCurrent(safety)) {
+      return (
+        <SafeAreaProvider>
+          <StatusBar style="dark" backgroundColor={COLORS.BG} />
+          <TermsGate
+            onAccepted={(state) => {
+              setSafety(state);
+              if (userId && termsCurrent(state)) {
+                AsyncStorage.setItem(`aura.termsAccepted.${userId}`, TERMS_VERSION).catch(() => {});
+              }
+            }}
+            onSignOut={signOutFromGate}
+          />
+        </SafeAreaProvider>
+      );
+    }
+  }
 
   // Routing logic precedence (top wins):
   //  1. Logged-in + profile complete  → tabs
@@ -195,6 +278,7 @@ export default function RootLayout() {
 &
         <Stack.Screen name="wallet" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="ops/index" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="ops/reports" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="sos" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="reset-password" options={{ animation: 'fade' }} />
         <Stack.Screen name="thread/[id]" options={{ animation: 'slide_from_right' }} />

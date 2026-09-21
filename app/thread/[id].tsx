@@ -11,6 +11,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { COLORS } from '@/constants/colors';
 import { fetchThread, sendThreadMessage, type ThreadMessage } from '@/lib/messages-supabase';
+import { SafetySheet } from '@/components/SafetySheet';
+import { useProposalsStore } from '@/store/proposals';
 import { pickAttachment, iconForMime, type PickedAttachment } from '@/lib/attachment-picker';
 
 const MAX_VIDEO_SEC = 30;
@@ -102,6 +104,16 @@ export default function ThreadScreen() {
   };
 
   const other = name || 'them';
+  const [safetyOpen, setSafetyOpen] = useState(false);
+  const refreshProposals = useProposalsStore((st) => st.refreshProposals);
+  // A thread that only exists on this device has nothing on the server to report against.
+  const reportable = !proposalId.startsWith('prop_');
+
+  // Reported or blocked: this conversation is gone for both of you.
+  const afterSafety = async () => {
+    await refreshProposals().catch(() => {});
+    router.canGoBack() ? router.back() : router.replace('/(tabs)');
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -115,7 +127,22 @@ export default function ThreadScreen() {
           <Text style={styles.title} numberOfLines={1}>{other}</Text>
           <Text style={styles.sub}>Videos & files · before you meet</Text>
         </View>
+        {reportable && (
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => setSafetyOpen(true)}
+            accessibilityLabel={`Report or block ${other}`}
+          >
+            <Ionicons name="ellipsis-horizontal" size={22} color={COLORS.TEXT} />
+          </TouchableOpacity>
+        )}
       </View>
+
+      <SafetySheet
+        target={safetyOpen ? { name: other.split(' ')[0], proposalId } : null}
+        onClose={() => setSafetyOpen(false)}
+        onDone={afterSafety}
+      />
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView

@@ -16,7 +16,7 @@ import { useDatesStore } from '@/store/dates';
 import { getCurrentLocation, distanceKm, formatDistance } from '@/lib/location';
 import { scheduleDateReminders } from '@/lib/notifications';
 import { addDateToCalendar } from '@/lib/calendar';
-import { blockUserOnServer, reportUserOnServer } from '@/lib/profile-supabase';
+import { SafetySheet } from '@/components/SafetySheet';
 import { iconForMime } from '@/lib/attachment-picker';
 import { canSendProposals } from '@/lib/roles';
 import {
@@ -157,77 +157,10 @@ export default function ProposalsScreen() {
     );
   };
 
-  // Overflow menu on the proposal — block or report the sender
-  const handleSafetyMenu = (p: Proposal) => {
-    Alert.alert(
-      p.from.name,
-      'What would you like to do?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Block this person',
-          style: 'destructive',
-          onPress: () => confirmBlock(p),
-        },
-        {
-          text: 'Report this person',
-          style: 'destructive',
-          onPress: () => confirmReport(p),
-        },
-      ]
-    );
-  };
-
-  const confirmBlock = (p: Proposal) => {
-    Alert.alert(
-      `Block ${p.from.name}?`,
-      'They won\'t be able to send you proposals. We\'ll also pass on this one.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Block',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await blockUserOnServer(p.from.id, 'Blocked from proposal');
-              await declineProposal(p.id);
-              Alert.alert('Blocked', `${p.from.name} can no longer reach you.`);
-            } catch (e: any) {
-              Alert.alert('Could not block', e?.message || 'Please try again.');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const confirmReport = (p: Proposal) => {
-    Alert.alert(
-      `Report ${p.from.name}?`,
-      'Our trust & safety team will review this. We\'ll also pass on the proposal and block them.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Report & block',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await reportUserOnServer({
-                reportedId: p.from.id,
-                reason: 'Reported from proposal',
-                relatedProposalId: p.id.startsWith('prop_') ? undefined : p.id,
-              });
-              await blockUserOnServer(p.from.id, 'Reported & blocked');
-              await declineProposal(p.id);
-              Alert.alert('Thank you', 'Your report has been sent to our safety team.');
-            } catch (e: any) {
-              Alert.alert('Could not report', e?.message || 'Please try again.');
-            }
-          },
-        },
-      ]
-    );
-  };
+  // Overflow menu on the proposal: the same report/block sheet as everywhere
+  // else. Either one hides the sender and this proposal at once, server-side.
+  const [safetyFor, setSafetyFor] = useState<Proposal | null>(null);
+  const handleSafetyMenu = (p: Proposal) => setSafetyFor(p);
 
   // Hours until tomorrow's 9 AM drop
   const hoursUntilTomorrow = () => {
@@ -570,6 +503,16 @@ export default function ProposalsScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
+
+      <SafetySheet
+        target={safetyFor ? {
+          name: safetyFor.from.name.split(' ')[0],
+          // A proposal that only exists on this device can still be reported by who sent it.
+          ...(safetyFor.id.startsWith('prop_') ? { userId: safetyFor.from.id } : { proposalId: safetyFor.id }),
+        } : null}
+        onClose={() => setSafetyFor(null)}
+        onDone={() => { refreshProposals().catch(() => {}); }}
+      />
 
       {/* Which of his offered slots suits her */}
       <Modal

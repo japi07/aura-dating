@@ -106,7 +106,10 @@ export default function ProfileScreen() {
     { icon: 'diamond-outline', label: 'Aura Gold', desc: 'Premium membership', color: '#FFCF40', route: '/settings/subscription', highlight: true },
     { icon: 'help-circle-outline', label: 'Help & Support', desc: 'FAQ & contact us', color: '#A78BFA', route: '/settings/help' },
     ...(isOps
-      ? [{ icon: 'construct-outline', label: 'Concierge console', desc: 'Plan dates and run the matcher', color: COLORS.PLUM, route: '/ops' }]
+      ? [
+          { icon: 'flag-outline', label: 'Safety reports', desc: 'Review member reports within 24 hours', color: COLORS.ERROR, route: '/ops/reports' },
+          { icon: 'construct-outline', label: 'Concierge console', desc: 'Plan dates and run the matcher', color: COLORS.PLUM, route: '/ops' },
+        ]
       : []),
   ];
 

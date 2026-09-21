@@ -4,15 +4,14 @@
 
 This Privacy Policy describes how Aura ("Aura", "we", "us", "our") collects, uses, and protects your information when you use the Aura mobile application (the "App") and related services (collectively, the "Services").
 
-> ⚠️ Replace every `[BRACKETED]` field with your real values before publishing. This template is written to satisfy Apple App Store Review (Guidelines 5.1.1, 5.1.2), Google Play, UK GDPR, and the California Consumer Privacy Act. **You must have it reviewed by a qualified lawyer in your jurisdiction before you ship.**
 
 ---
 
 ## 1. Who we are
 
-Aura is operated by **[Aura Dating Limited]**, a company registered in England and Wales (company number **[XXXXXXXX]**), with registered office at **[Your Registered Address, London, UK]**.
+Aura is operated by the developer of Aura named on its App Store listing.
 
-- **Data Controller**: [Aura Dating Limited]
+- **Data Controller**: the developer of Aura named on its App Store listing
 - **Data Protection Officer (DPO)**: [name + email]
 - **Contact email**: azpiazujavier@gmail.com
 - **Support email**: azpiazujavier@gmail.com
@@ -86,7 +85,7 @@ We share information only with:
   - **Daily.co** (live audio when you take a call date)
   - **RevenueCat** (subscription status for Aura Gold)
   - **Ticket Tailor** (name and email when you book a ticketed event)
-  - **OpenAI** (automated image moderation)
+  - **OpenAI** (automated moderation of photos, video frames, profile text and messages, to keep objectionable content off Aura; content is screened, not used to train models)
 - **Law enforcement** when required by a valid legal order, in good faith, or to protect the safety of users.
 
 We do **not** sell your personal data. We do **not** use your photos or videos to train AI models.
@@ -165,5 +164,4 @@ If we materially change this Privacy Policy we will notify you in-app and via em
 For any privacy question or to exercise your rights:
 
 - Email: **azpiazujavier@gmail.com**
-- Postal: [Aura Dating Limited, Your Registered Address, London, UK]
 - Lead supervisory authority: **UK Information Commissioner's Office** (https://ico.org.uk)

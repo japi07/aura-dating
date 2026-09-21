@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, TouchableOpacity,
-  Image, StatusBar, Alert, ActivityIndicator,
+  Image, StatusBar, Alert, ActivityIndicator, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
-import { fetchMyBlocks, unblockUserOnServer, type BlockedMember } from '@/lib/profile-supabase';
+import { fetchMyBlocks, unblock as unblockOnServer, SUPPORT_EMAIL, type BlockedMember } from '@/lib/safety-supabase';
 import { useSettingsStore } from '@/store/settings';
 
 const SAFETY_TIPS = [
@@ -43,17 +43,18 @@ export default function SafetyScreen() {
     return () => { active = false; };
   }, []);
 
-  const unblock = (blockedId: string, name: string) => {
-    Alert.alert(`Unblock ${name}?`, 'They\'ll be able to send you proposals again.', [
+  // By the block's own id: a block made from a call never gave us theirs.
+  const unblock = (blockId: string, name: string) => {
+    Alert.alert(`Unblock ${name}?`, 'You\'ll be able to see each other on Aura again.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Unblock',
         onPress: async () => {
           // Optimistic removal, then persist
           const prev = blocked;
-          setBlocked((b) => b.filter(x => x.blockedId !== blockedId));
+          setBlocked((b) => b.filter(x => x.id !== blockId));
           try {
-            await unblockUserOnServer(blockedId);
+            await unblockOnServer(blockId);
           } catch (e: any) {
             setBlocked(prev); // revert on failure
             Alert.alert('Could not unblock', e?.message || 'Please try again.');
@@ -156,7 +157,7 @@ export default function SafetyScreen() {
                     <Text style={styles.blockName}>{u.name}{u.age ? `, ${u.age}` : ''}</Text>
                     {!!u.reason && <Text style={styles.blockMeta}>{u.reason}</Text>}
                   </View>
-                  <TouchableOpacity style={styles.unblockBtn} onPress={() => unblock(u.blockedId, u.name)}>
+                  <TouchableOpacity style={styles.unblockBtn} onPress={() => unblock(u.id, u.name)}>
                     <Text style={styles.unblockText}>Unblock</Text>
                   </TouchableOpacity>
                 </View>
@@ -173,8 +174,11 @@ export default function SafetyScreen() {
               activeOpacity={0.7}
               onPress={() => Alert.alert(
                 'How to report someone',
-                'Open the proposal from the person you want to report and tap the “⋯” menu in the top corner. You can block or report them from there, and it goes straight to our trust & safety team.',
-                [{ text: 'Got it' }],
+                'Tap ⋯ on their profile, your conversation or your date, or Report during a call. Reporting blocks them straight away, and our team reviews every report within 24 hours. Anyone who breaks our rules is removed from Aura.',
+                [
+                  { text: 'Email us instead', onPress: () => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Safety%20report`).catch(() => {}) },
+                  { text: 'Got it' },
+                ],
               )}
             >
               <View style={[styles.rowIcon, { backgroundColor: COLORS.ERROR_LIGHT }]}>
@@ -182,7 +186,7 @@ export default function SafetyScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.rowLabel, { color: COLORS.ERROR }]}>Report someone</Text>
-                <Text style={styles.rowDesc}>Inappropriate behavior, harassment, or no-show</Text>
+                <Text style={styles.rowDesc}>Harassment, inappropriate content or a safety concern. Reviewed within 24 hours.</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={COLORS.BORDER} />
             </TouchableOpacity>

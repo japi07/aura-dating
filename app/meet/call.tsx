@@ -20,6 +20,7 @@ import {
 } from '@/lib/calls-supabase';
 import { WindowClosedNotice, useDailyWindow } from '@/components/WindowCountdown';
 import { useTokensStore } from '@/store/tokens';
+import { SafetySheet } from '@/components/SafetySheet';
 
 type Phase = 'intro' | 'waiting' | 'connecting' | 'live' | 'outcome' | 'done';
 
@@ -51,6 +52,8 @@ export default function CallScreen() {
   const [partnerHere, setPartnerHere] = useState(false);
   const [busy, setBusy] = useState(false);
   const [outcomeDateId, setOutcomeDateId] = useState<string | null>(null);
+  /** Report/block sheet. Works from the call id alone: the app never learns who they are. */
+  const [safetyOpen, setSafetyOpen] = useState(false);
   const [myAnswer, setMyAnswer] = useState<boolean | null>(null);
 
   const session = useRef<CallSession | null>(null);
@@ -225,6 +228,17 @@ export default function CallScreen() {
     leaveCallQueue().catch(() => {});
   }, []);
 
+  // Reported or blocked: the server has already ended the call for both of
+  // you. Leave the room, and don't ask whether they'd like to meet.
+  const afterSafety = useCallback(() => {
+    teardown();
+    setCall(null);
+    setPartnerHere(false);
+    setMyAnswer(null);
+    setOutcomeDateId(null);
+    setPhase('intro');
+  }, [teardown]);
+
   /* ─── background: a call keeps running, a queue place does not ─── */
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
@@ -385,11 +399,12 @@ export default function CallScreen() {
           onMute={toggleMute}
           onSpeaker={toggleSpeaker}
           onEnd={endCall}
+          onReport={() => setSafetyOpen(true)}
         />
       )}
 
       {phase === 'outcome' && call && (
-        <Outcome name={call.otherName} busy={busy} onAnswer={answer} />
+        <Outcome name={call.otherName} busy={busy} onAnswer={answer} onReport={() => setSafetyOpen(true)} />
       )}
 
       {phase === 'done' && (
@@ -399,8 +414,15 @@ export default function CallScreen() {
           dateId={outcomeDateId}
           onDates={() => router.replace('/(tabs)/connections')}
           onAgain={() => { setCall(null); setPartnerHere(false); setPhase('intro'); }}
+          onReport={call ? () => setSafetyOpen(true) : undefined}
         />
       )}
+
+      <SafetySheet
+        target={safetyOpen && call ? { name: call.otherName, callId: call.id } : null}
+        onClose={() => setSafetyOpen(false)}
+        onDone={afterSafety}
+      />
     </SafeAreaView>
   );
 }
@@ -519,15 +541,24 @@ function Waiting({ queueSize, onCancel }: { queueSize: number; onCancel: () => v
   );
 }
 
-function Live({ name, partnerHere, remaining, muted, speaker, onMute, onSpeaker, onEnd }: {
+function Live({ name, partnerHere, remaining, muted, speaker, onMute, onSpeaker, onEnd, onReport }: {
   name: string; partnerHere: boolean; remaining: number;
   muted: boolean; speaker: boolean;
-  onMute: () => void; onSpeaker: () => void; onEnd: () => void;
+  onMute: () => void; onSpeaker: () => void; onEnd: () => void; onReport: () => void;
 }) {
   const lowTime = remaining <= 60;
 
   return (
     <View style={s.live}>
+      <TouchableOpacity
+        style={s.liveReport}
+        onPress={onReport}
+        activeOpacity={0.8}
+        accessibilityLabel="Report or block this caller"
+      >
+        <Ionicons name="flag" size={14} color="#fff" />
+        <Text style={s.liveReportText}>Report</Text>
+      </TouchableOpacity>
       <View style={s.liveTop}>
         <Text style={s.liveName}>{name}</Text>
         <Text style={s.liveStatus}>
@@ -550,8 +581,8 @@ function Live({ name, partnerHere, remaining, muted, speaker, onMute, onSpeaker,
   );
 }
 
-function Outcome({ name, busy, onAnswer }: {
-  name: string; busy: boolean; onAnswer: (wants: boolean) => void;
+function Outcome({ name, busy, onAnswer, onReport }: {
+  name: string; busy: boolean; onAnswer: (wants: boolean) => void; onReport: () => void;
 }) {
   return (
     <ScrollView contentContainerStyle={s.body}>
@@ -582,13 +613,25 @@ function Outcome({ name, busy, onAnswer }: {
       >
         <Text style={s.secondaryText}>Not this time</Text>
       </TouchableOpacity>
+
+      <ReportLink name={name} onPress={onReport} />
     </ScrollView>
   );
 }
 
-function Done({ name, saidYes, dateId, onDates, onAgain }: {
+/** Quiet, but always there: a call can go wrong in ways worth telling us about. */
+function ReportLink({ name, onPress }: { name: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={s.reportLink} onPress={onPress} activeOpacity={0.7}>
+      <Ionicons name="flag-outline" size={14} color={COLORS.TEXT_MUTED} />
+      <Text style={s.reportLinkText}>Report or block {name}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function Done({ name, saidYes, dateId, onDates, onAgain, onReport }: {
   name: string; saidYes: boolean; dateId: string | null;
-  onDates: () => void; onAgain: () => void;
+  onDates: () => void; onAgain: () => void; onReport?: () => void;
 }) {
   const matched = saidYes && !!dateId;
 
@@ -618,6 +661,8 @@ function Done({ name, saidYes, dateId, onDates, onAgain }: {
           <Text style={s.primaryText}>Another call</Text>
         </TouchableOpacity>
       )}
+
+      {onReport && <ReportLink name={name} onPress={onReport} />}
     </ScrollView>
   );
 }
@@ -713,6 +758,16 @@ const s = StyleSheet.create({
 
   // live
   live: { flex: 1, justifyContent: 'space-between', paddingVertical: 60, paddingHorizontal: 28 },
+  liveReport: {
+    position: 'absolute', top: 16, right: 20, zIndex: 2, flexDirection: 'row', alignItems: 'center',
+    gap: 6, paddingHorizontal: 14, minHeight: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  liveReportText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  reportLink: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    minHeight: 44, marginTop: 14,
+  },
+  reportLinkText: { fontSize: 13.5, fontWeight: '700', color: COLORS.TEXT_MUTED },
   liveTop: { alignItems: 'center', gap: 6, marginTop: 40 },
   liveName: { fontSize: 30, fontWeight: '900', color: '#fff', letterSpacing: -0.6 },
   liveStatus: { fontSize: 13, color: 'rgba(255,255,255,0.65)', fontWeight: '600' },

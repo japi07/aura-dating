@@ -1,10 +1,10 @@
 # Terms of Service
 
-**Last updated: 21 June 2026**
+**Last updated: 21 September 2026**
 
-These Terms of Service ("Terms") govern your access to and use of Aura ("Aura", "we", "us", "our") provided by **[Aura Dating Limited]**. By creating an account or using the App, you agree to these Terms. If you don't agree, do not use Aura.
+These Terms of Service ("Terms") govern your access to and use of Aura ("Aura", "we", "us", "our"), provided by the developer of Aura named on its App Store listing. They are the end-user licence agreement (EULA) for the Aura app and work alongside Apple's standard Licensed Application End User License Agreement.
 
-> ⚠️ Replace every `[BRACKETED]` field with your real values before publishing and have a lawyer review.
+**You accept these Terms inside the app, before you can use it**, when you confirm you are 18 or older and tap *Agree and continue*. If you don't agree, do not use Aura.
 
 ## 1. Eligibility
 
@@ -45,6 +45,15 @@ You agree not to:
 
 Violation of any of the above results in **immediate termination without refund** and may be reported to law enforcement.
 
+### Zero tolerance for objectionable content and abusive users
+
+Aura has **zero tolerance** for objectionable content and for abusive members. That covers anything you post, send or say anywhere on Aura: your profile, photos and bio, proposals, video introductions, messages, and voice calls, including calls and blind dates where the other person doesn't yet know who you are. Objectionable content includes harassment, bullying, threats, hate speech, discrimination, sexual content nobody asked for, and anything that sexualises minors.
+
+- Text, photos and videos are screened automatically, and content that breaks these rules is refused before anyone sees it.
+- Every member can **report** and **block** anyone, from their profile, a conversation, a date or during a call. Blocking removes that person from your view immediately, everywhere in the app.
+- **We review every report within 24 hours.** Where content breaks these Terms, we remove it and remove the member who posted it from Aura. We do not warn first.
+- Removed members may not create another account.
+
 ## 4. Content & licence
 
 You retain all rights to the content you upload (photos, videos, captions, etc.). By uploading content you grant Aura a **worldwide, non-exclusive, royalty-free licence** to host, display, and transmit that content **strictly for the purpose of operating the Service**. We do not use your content for advertising, marketing, or to train AI models.
@@ -76,14 +85,14 @@ Aura provides safety tools (block, report, SOS) but **we are not responsible for
 - Not share financial information
 - Use your own transport
 
-If you experience inappropriate behavior, report it in-app or email **azpiazujavier@gmail.com**. We respond to safety reports within 24 hours.
+If you experience inappropriate behaviour, tap **⋯** on the person's profile, your conversation or your date, or **Report** during a call. You can also email **azpiazujavier@gmail.com**, or find the same contact in the app under *Profile → Help & Support*. We act on every safety report within 24 hours. If you are in immediate danger, call **999**.
 
 ## 8. Termination
 
 We may suspend or terminate your account immediately if:
 - You breach these Terms
 - We believe you are under 18
-- You are reported for harassment, fraud, or threats
+- You post objectionable content or are reported for harassment, fraud, or threats and a review upholds the report
 - We are required by law
 
 You may delete your account at any time: **Profile → Privacy → Delete my account**.
@@ -118,6 +127,5 @@ We may update these Terms. If we make material changes we will notify you in-app
 - **General**: azpiazujavier@gmail.com
 - **Privacy**: azpiazujavier@gmail.com
 - **Safety / abuse**: azpiazujavier@gmail.com
-- **Postal**: [Aura Dating Limited, Your Registered Address, London, UK]
 
 By using Aura you confirm you have read, understood, and agree to be bound by these Terms.

@@ -12,6 +12,7 @@ import { useUsersStore, type DirectoryUser } from '@/store/users';
 import { MemberCard } from '@/components/MemberCard';
 import { MemberDetailSheet } from '@/components/MemberDetailSheet';
 import { canSendProposals } from '@/lib/roles';
+import { SafetySheet } from '@/components/SafetySheet';
 
 const CARD_W = Dimensions.get('window').width - 32;
 
@@ -23,9 +24,19 @@ const CARD_W = Dimensions.get('window').width - 32;
 export default function BrowseScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { candidatesFor, hydrate, isHydrated, refreshFromServer } = useUsersStore();
+  const { candidatesFor, hydrate, isHydrated, refreshFromServer, removeUser } = useUsersStore();
   const [refreshing, setRefreshing] = useState(false);
   const [previewing, setPreviewing] = useState<DirectoryUser | null>(null);
+  /** The card whose report/block sheet is open (not the full profile's). */
+  const [safetyFor, setSafetyFor] = useState<DirectoryUser | null>(null);
+
+  // Reported or blocked: gone from this list now, not on the next refresh.
+  // The server hides them from every later fetch as well.
+  const dropMember = (p: DirectoryUser) => {
+    setPreviewing(null);
+    setSafetyFor(null);
+    removeUser(p.email);
+  };
   // Only proposers get the compose actions — everyone else browses
   const isSender = canSendProposals(user);
 
@@ -107,10 +118,20 @@ export default function BrowseScreen() {
               onPress={() => setPreviewing(p)}
               footer={
                 <View style={{ gap: 8 }}>
-                  <TouchableOpacity style={styles.viewBtn} onPress={() => setPreviewing(p)} activeOpacity={0.8}>
-                    <Ionicons name="expand-outline" size={15} color={COLORS.TEXT_SECONDARY} />
-                    <Text style={styles.viewText}>View full profile</Text>
-                  </TouchableOpacity>
+                  <View style={styles.viewRow}>
+                    <TouchableOpacity style={[styles.viewBtn, { flex: 1 }]} onPress={() => setPreviewing(p)} activeOpacity={0.8}>
+                      <Ionicons name="expand-outline" size={15} color={COLORS.TEXT_SECONDARY} />
+                      <Text style={styles.viewText}>View full profile</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.moreBtn}
+                      onPress={() => setSafetyFor(p)}
+                      activeOpacity={0.8}
+                      accessibilityLabel={`Report or block ${p.name}`}
+                    >
+                      <Ionicons name="ellipsis-horizontal" size={18} color={COLORS.TEXT_SECONDARY} />
+                    </TouchableOpacity>
+                  </View>
                   {isSender && (
                     <TouchableOpacity style={styles.proposeBtn} onPress={() => propose(p)} activeOpacity={0.88}>
                       <Ionicons name="heart" size={17} color="#fff" />
@@ -130,6 +151,14 @@ export default function BrowseScreen() {
         onClose={() => setPreviewing(null)}
         ctaLabel={previewing ? `Propose to ${previewing.name.split(' ')[0]}` : undefined}
         onCta={isSender ? () => previewing && propose(previewing) : undefined}
+        safetyTarget={previewing ? { name: previewing.name.split(' ')[0], userId: previewing.id } : undefined}
+        onSafetyDone={() => previewing && dropMember(previewing)}
+      />
+
+      <SafetySheet
+        target={safetyFor ? { name: safetyFor.name.split(' ')[0], userId: safetyFor.id } : null}
+        onClose={() => setSafetyFor(null)}
+        onDone={() => safetyFor && dropMember(safetyFor)}
       />
     </SafeAreaView>
   );
@@ -159,6 +188,11 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.BG, borderWidth: 1, borderColor: COLORS.BORDER,
   },
   viewText: { fontSize: 12, fontWeight: '700', color: COLORS.TEXT_SECONDARY },
+  viewRow: { flexDirection: 'row', gap: 8 },
+  moreBtn: {
+    width: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12,
+    backgroundColor: COLORS.BG, borderWidth: 1, borderColor: COLORS.BORDER,
+  },
   proposeBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     paddingVertical: 14, borderRadius: 14, backgroundColor: COLORS.BRAND,

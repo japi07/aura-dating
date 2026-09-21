@@ -7,6 +7,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
 import type { MemberCardPerson } from './MemberCard';
+import { SafetySheet, type SafetyOutcome } from './SafetySheet';
+import type { SafetyTarget } from '@/lib/safety-supabase';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -17,6 +19,10 @@ interface MemberDetailSheetProps {
   /** Primary CTA — e.g. "Propose to Anna" */
   ctaLabel?: string;
   onCta?: () => void;
+  /** Who to report or block from this profile. No target, no menu. */
+  safetyTarget?: SafetyTarget;
+  /** After a report or block: the profile is gone, so the caller closes it. */
+  onSafetyDone?: (outcome: SafetyOutcome) => void;
 }
 
 /**
@@ -24,8 +30,11 @@ interface MemberDetailSheetProps {
  * verification status — so you know who you're inviting before you spend the
  * effort recording a video and planning a date.
  */
-export function MemberDetailSheet({ person, visible, onClose, ctaLabel, onCta }: MemberDetailSheetProps) {
+export function MemberDetailSheet({
+  person, visible, onClose, ctaLabel, onCta, safetyTarget, onSafetyDone,
+}: MemberDetailSheetProps) {
   const [page, setPage] = useState(0);
+  const [safetyOpen, setSafetyOpen] = useState(false);
   if (!person) return null;
 
   const photos = (person.photos?.length ? person.photos : (person.photoUrl ? [person.photoUrl] : []))
@@ -73,6 +82,17 @@ export function MemberDetailSheet({ person, visible, onClose, ctaLabel, onCta }:
             <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.8}>
               <Ionicons name="chevron-down" size={24} color="#fff" />
             </TouchableOpacity>
+
+            {safetyTarget && (
+              <TouchableOpacity
+                style={styles.safetyBtn}
+                onPress={() => setSafetyOpen(true)}
+                activeOpacity={0.8}
+                accessibilityLabel={`Report or block ${person.name}`}
+              >
+                <Ionicons name="ellipsis-horizontal" size={22} color="#fff" />
+              </TouchableOpacity>
+            )}
 
             {photos.length > 1 && (
               <View style={styles.dots} pointerEvents="none">
@@ -157,6 +177,13 @@ export function MemberDetailSheet({ person, visible, onClose, ctaLabel, onCta }:
             </TouchableOpacity>
           </View>
         )}
+
+        {/* Inside this Modal on purpose: iOS won't stack a sibling modal on top. */}
+        <SafetySheet
+          target={safetyOpen ? safetyTarget ?? null : null}
+          onClose={() => setSafetyOpen(false)}
+          onDone={(outcome) => onSafetyDone?.(outcome)}
+        />
       </View>
     </Modal>
   );
@@ -171,6 +198,10 @@ const styles = StyleSheet.create({
 
   closeBtn: {
     position: 'absolute', top: 52, left: 16, width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(20,16,40,0.45)', justifyContent: 'center', alignItems: 'center',
+  },
+  safetyBtn: {
+    position: 'absolute', top: 52, right: 16, width: 40, height: 40, borderRadius: 20,
     backgroundColor: 'rgba(20,16,40,0.45)', justifyContent: 'center', alignItems: 'center',
   },
   dots: { position: 'absolute', top: 62, alignSelf: 'center', flexDirection: 'row', gap: 5 },

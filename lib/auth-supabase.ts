@@ -23,6 +23,9 @@ export interface SignUpInput {
 export async function signUpWithEmail(input: SignUpInput): Promise<{ user: User; token: string }> {
   if (!supabaseEnabled) throw new Error('Supabase not configured');
   const supabase = getSupabase();
+  // Before the account exists: refused later, it would be left half made.
+  const { assertCleanText } = await import('./safety-supabase');
+  await assertCleanText(input.name, input.bio);
 
   const { data, error } = await supabase.auth.signUp({
     email: input.email,
@@ -82,7 +85,10 @@ export async function signUpWithEmail(input: SignUpInput): Promise<{ user: User;
     photos: photoUrl ? [photoUrl] : [],
     profile_complete: true,
   });
-  if (profileError) throw profileError;
+  if (profileError) {
+    const { friendlyError } = await import('./safety-supabase');
+    throw new Error(friendlyError(profileError));
+  }
 
   const user: User = {
     id: data.user.id,

@@ -71,7 +71,6 @@ export const useUsersStore = create<UsersState>((set, get) => ({
       const uid = await getSessionUserId();
       if (!uid) return;
       const members = await fetchMembers();
-      if (!members.length) return;
       const now = new Date().toISOString();
       const fromServer: DirectoryUser[] = members.map(m => ({
         id: m.id,
@@ -88,9 +87,13 @@ export const useUsersStore = create<UsersState>((set, get) => ({
         verified: m.verified,
         updatedAt: now,
       }));
-      const serverEmails = new Set(fromServer.map(u => u.email));
-      const localOnly = get().users.filter(u => !serverEmails.has(u.email));
-      const list = [...fromServer, ...localOnly];
+      // The server decides who is visible. Someone you blocked, who blocked
+      // you, or who was removed from Aura is simply not returned, so any
+      // cached copy has to go too. Keeping rows the server no longer sends
+      // used to leave blocked and banned members on screen indefinitely.
+      // Only your own entry is kept; the list never shows it anyway.
+      const self = get().users.filter(u => u.id === uid);
+      const list = [...fromServer, ...self];
       set({ users: list });
       await persist(list);
     } catch {
