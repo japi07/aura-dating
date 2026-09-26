@@ -146,7 +146,9 @@ export const useProposalsStore = create<ProposalsState>((set, get) => ({
         set({ isLoading: false });
         return;
       }
-      const rows = await fetchMyProposals();
+      // A withdrawn invitation, or one cancelled when its sender was removed,
+      // is gone for both people, not left sitting in an inbox as "pending".
+      const rows = (await fetchMyProposals()).filter(r => r.status !== 'cancelled');
       const proposals = rows.map(r => r.proposal);
       // Reflect server-side decisions so decided proposals leave the inbox
       const decisions: Record<string, DecisionRecord> = {};

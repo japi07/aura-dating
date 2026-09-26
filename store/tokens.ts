@@ -122,8 +122,12 @@ export const useTokensStore = create<TokensStore>((set, get) => ({
   },
 
   markUsed: async (mode) => {
-    const ok = await consumeEntry(mode);
-    if (!ok) return;
+    // Called once the thing has happened. For an invitation the server has
+    // already spent the ticket in the insert trigger, so consume answers
+    // false -- and trusting that answer left the phone believing the ticket
+    // was still unused, so the next Send failed with NO_ENTRY. The local
+    // copy follows what happened, whatever consume says.
+    await consumeEntry(mode).catch(() => false);
     set((st: TokensStore) => {
       const entry = st.entries[mode];
       if (!entry) return {} as any;

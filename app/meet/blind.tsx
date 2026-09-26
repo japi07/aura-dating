@@ -10,6 +10,7 @@ import { COLORS } from '@/constants/colors';
 import { WindowClosedNotice, useDailyWindow } from '@/components/WindowCountdown';
 import { useTokensStore } from '@/store/tokens';
 import { runBlindMatcher } from '@/lib/ops-supabase';
+import { AnonymousSafetyCard } from '@/components/AnonymousSafetyCard';
 import {
   fetchMyBlindSignup, fetchPoolSize, joinBlindPool, leaveBlindPool,
   type BlindSignup,
@@ -163,7 +164,7 @@ export default function BlindScreen() {
           paid={hasTicket('blind')}
           secondsUntilOpen={w.secondsUntilOpen}
           onJoin={join}
-          onPay={() => router.push('/pay/blind')}
+          onPay={() => router.push({ pathname: '/pay/[mode]', params: { mode: 'blind', back: '1' } })}
         />
       )}
     </SafeAreaView>
@@ -187,11 +188,12 @@ function Idle({ pool, busy, windowOpen, paid, secondsUntilOpen, onJoin, onPay }:
       </View>
 
       <View style={s.promiseCard}>
-        <Assurance icon="eye-off-outline" text="You won't see who it is until you're there" />
-        <Assurance icon="restaurant-outline" text="We choose the venue and the time" />
-        <Assurance icon="shield-checkmark-outline" text="Everyone is ID-verified before they can join" />
+        <Assurance icon="eye-off-outline" text="No photos before you meet: just a first name" />
+        <Assurance icon="restaurant-outline" text="We choose a public venue and the time" />
         <Assurance icon="calendar-outline" text="You'll get the details in your Dates tab" />
       </View>
+
+      <AnonymousSafetyCard mode="blind" />
 
       {pool?.enough && (
         <Text style={s.poolLine}>{pool.bucket} people are in the pool right now</Text>
@@ -265,6 +267,8 @@ function Waiting({ pool, busy, onLeave }: {
       <TouchableOpacity style={s.leaveBtn} onPress={onLeave} disabled={busy}>
         <Text style={s.leaveText}>Leave the pool</Text>
       </TouchableOpacity>
+
+      <AnonymousSafetyCard mode="blind" />
     </ScrollView>
   );
 }

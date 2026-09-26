@@ -19,15 +19,11 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: 'Why do I only get one proposal at a time?',
-    a: 'Quality over quantity. We show one curated proposal so you can give it real attention, rather than endlessly scrolling. Aura Gold members can receive more per day.',
+    a: 'Quality over quantity. We show one curated proposal so you can give it real attention, rather than endlessly scrolling.',
   },
   {
     q: 'How do I get verified?',
-    a: 'Go to your Profile and tap “Get the verified badge.” You’ll do a quick Face ID check, take a selfie, and record a short liveness video. Our team reviews it, usually within an hour. Verified profiles get far more proposals.',
-  },
-  {
-    q: 'What is Aura Gold?',
-    a: 'Aura Gold is our premium membership: more proposals per day, incognito browsing, priority in the matching queue, and members-only events. You can subscribe from Profile → Aura Gold, and cancel anytime in your Apple ID settings.',
+    a: 'Go to your Profile and tap “Get the verified badge.” You’ll do a quick Face ID check, take a selfie, and record a short liveness video. Once it’s approved, a verified badge appears on your profile.',
   },
   {
     q: 'How do I stay safe on a date?',
@@ -35,7 +31,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: 'How do I block or report someone?',
-    a: 'On any proposal, tap the “⋯” menu in the top corner to block or report the sender. Blocked people can no longer reach you, and reports go straight to our trust & safety team.',
+    a: 'Tap “Report or block” on any profile, invitation, conversation or date card, or “End & report” during a call. You can also go to Profile → Safety → Report someone, which lists everyone you have had a call, date or invitation with. Blocking hides you from each other at once, and a person reviews every report within 24 hours and removes anyone who breaks our rules.',
   },
   {
     q: 'Can I get a refund?',

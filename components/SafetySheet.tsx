@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Modal, View, Text, TouchableOpacity, TextInput, StyleSheet, ActivityIndicator,
   Linking, KeyboardAvoidingView, Platform, ScrollView, Alert,
@@ -6,7 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
 import {
-  REPORT_REASONS, SUPPORT_EMAIL, reportMember, blockMember, type SafetyTarget,
+  REPORT_REASONS, SUPPORT_EMAIL, reportMember, blockMember, targetKey, type SafetyTarget,
 } from '@/lib/safety-supabase';
 
 export type SafetyOutcome = 'reported' | 'blocked';
@@ -24,6 +24,10 @@ type Stage = 'menu' | 'report' | 'done';
  * When this sheet is opened from inside another Modal, render it inside that
  * Modal's tree: iOS will not present a sibling modal over one already showing.
  */
+// The slide-down dismiss takes about 300ms. If iOS never reports it (it
+// should), the outcome is delivered after this anyway.
+const DISMISS_FALLBACK_MS = 800;
+
 export function SafetySheet({ target, onClose, onDone }: {
   target: SafetyTarget | null;
   onClose: () => void;
@@ -36,24 +40,66 @@ export function SafetySheet({ target, onClose, onDone }: {
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<SafetyOutcome | null>(null);
 
+  /**
+   * The sheet stays mounted while it animates away, showing the last person
+   * it was opened for. It used to unmount the instant it closed, in the same
+   * commit as the caller's onDone -- and when the caller is itself a modal
+   * (the full-profile sheet) that closes on onDone, iOS was asked to dismiss
+   * both view controllers at once. The outer one never went away: a frozen
+   * full-screen profile, and a force-quit. So onDone now waits until this
+   * sheet has finished dismissing.
+   */
+  const [shown, setShown] = useState<SafetyTarget | null>(target);
+  /**
+   * The caller's onDone, bound as it was when the sheet closed. The render
+   * that dismisses the sheet has already cleared the caller's state (their
+   * onClose ran first), so calling the onDone of that later render would
+   * find nothing to remove -- the reported person stayed on screen.
+   */
+  const pendingDone = useRef<(() => void) | null>(null);
+  const fallback = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (target) setShown(target); }, [targetKey(target)]);
+  useEffect(() => () => { if (fallback.current) clearTimeout(fallback.current); }, []);
+
+  const flushDone = () => {
+    if (fallback.current) { clearTimeout(fallback.current); fallback.current = null; }
+    const run = pendingDone.current;
+    pendingDone.current = null;
+    run?.();
+  };
+
+  // Reset when the sheet opens for someone, not on every render. Callers
+  // build the target inline, so its identity changes whenever their screen
+  // re-renders -- once a second during a call, with the countdown -- and
+  // keying on the object reset the form under the member mid-report.
+  const key = targetKey(target);
   useEffect(() => {
-    if (target) {
+    if (key) {
       setStage('menu');
       setReason(null);
       setDetails('');
       setOutcome(null);
       setBusy(false);
     }
-  }, [target]);
+  }, [key]);
 
-  if (!target) return null;
-  const name = target.name || 'this person';
+  const t = target ?? shown;
+  if (!t) return null;
+  const name = t.name || 'this person';
 
   const close = () => {
     if (busy) return;
     const done = outcome;
     onClose();
-    if (done) onDone?.(done);
+    if (!done) return;
+    if (Platform.OS === 'ios') {
+      const cb = onDone;
+      pendingDone.current = () => cb?.(done);
+      fallback.current = setTimeout(flushDone, DISMISS_FALLBACK_MS);
+    } else {
+      onDone?.(done);
+    }
   };
 
   const confirmBlock = () => {
@@ -68,7 +114,7 @@ export function SafetySheet({ target, onClose, onDone }: {
           onPress: async () => {
             setBusy(true);
             try {
-              await blockMember(target);
+              await blockMember(t);
               setOutcome('blocked');
               setStage('done');
             } catch (e: any) {
@@ -86,7 +132,7 @@ export function SafetySheet({ target, onClose, onDone }: {
     if (!reason) return;
     setBusy(true);
     try {
-      await reportMember(target, reason, details);
+      await reportMember(t, reason, details);
       setOutcome('reported');
       setStage('done');
     } catch (e: any) {
@@ -103,7 +149,7 @@ export function SafetySheet({ target, onClose, onDone }: {
   };
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={close}>
+    <Modal visible={!!target} transparent animationType="slide" onRequestClose={close} onDismiss={flushDone}>
       <KeyboardAvoidingView
         style={s.backdrop}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -226,6 +272,30 @@ export function SafetySheet({ target, onClose, onDone }: {
   );
 }
 
+/**
+ * The visible way in. An unlabelled ⋯ reads as decoration; App Review looks
+ * for the words, so every place a member sees someone else says them.
+ */
+export function ReportBlockLink({ name, onPress, tone = 'light' }: {
+  name: string;
+  onPress: () => void;
+  tone?: 'light' | 'dark';
+}) {
+  const color = tone === 'dark' ? 'rgba(255,255,255,0.85)' : COLORS.TEXT_SECONDARY;
+  return (
+    <TouchableOpacity
+      style={s.reportLink}
+      onPress={onPress}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`Report or block ${name}`}
+    >
+      <Ionicons name="flag-outline" size={15} color={color} />
+      <Text style={[s.reportLinkText, { color }]}>Report or block {name}</Text>
+    </TouchableOpacity>
+  );
+}
+
 function Contact({ onEmail }: { onEmail: () => void }) {
   return (
     <View style={s.contact}>
@@ -294,4 +364,9 @@ const s = StyleSheet.create({
   },
   contactText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: COLORS.TEXT_SECONDARY },
   contactLink: { color: COLORS.BRAND, fontWeight: '700' },
+  reportLink: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    minHeight: 44, paddingHorizontal: 12,
+  },
+  reportLinkText: { fontSize: 13.5, fontWeight: '700' },
 });

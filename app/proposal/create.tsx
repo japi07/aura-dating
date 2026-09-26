@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, KeyboardAvoidingView,
   Platform, Alert, TouchableOpacity, Image, Dimensions,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -13,6 +13,7 @@ import { Input } from '@/components/Input';
 import { DatePlanner, planToISO, type DayPlan } from '@/components/DatePlanner';
 import { MemberCard } from '@/components/MemberCard';
 import { MemberDetailSheet } from '@/components/MemberDetailSheet';
+import { SafetySheet, ReportBlockLink } from '@/components/SafetySheet';
 import { pickAttachment, iconForMime, type PickedAttachment } from '@/lib/attachment-picker';
 import { canSendProposals } from '@/lib/roles';
 import { WindowClosedNotice, useDailyWindow } from '@/components/WindowCountdown';
@@ -46,12 +47,12 @@ export default function CreateProposalScreen() {
   const { sendProposal } = useProposalsStore();
   const {
     candidatesFor, hydrate: hydrateUsers, isHydrated: usersHydrated,
-    refreshFromServer: refreshUsersFromServer,
+    refreshFromServer: refreshUsersFromServer, removeUser,
   } = useUsersStore();
   const [loading, setLoading] = useState(false);
   // Read before the early return below, so the hook order never changes
   const w = useDailyWindow();
-  const { hasEntry, markUsed } = useTokensStore();
+  const { hasEntry, hasTicket, markUsed } = useTokensStore();
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Safety net: the entry points are already hidden for non-proposers, but
@@ -101,6 +102,16 @@ export default function CreateProposalScreen() {
   );
   // Full-profile preview before committing to a proposal
   const [previewing, setPreviewing] = useState<DirectoryUser | null>(null);
+  const [safetyFor, setSafetyFor] = useState<DirectoryUser | null>(null);
+  /** Set when Send had to go and pay first; the send resumes on return. */
+  const resumeSend = useRef(false);
+  // Reported or blocked: out of the list now, and not the one you're inviting.
+  const dropMember = (m: DirectoryUser) => {
+    setPreviewing(null);
+    setSafetyFor(null);
+    setSelectedRecipient((cur: any) => (cur?.email === m.email ? null : cur));
+    removeUser(m.email);
+  };
 
   const [message, setMessage] = useState('');
   const [dateType, setDateType] = useState('');
@@ -293,8 +304,23 @@ export default function CreateProposalScreen() {
 
   const handleSend = async () => {
     if (!w.open) return;
-    if (!hasEntry('proposal')) { router.push('/pay/proposal'); return; }
+    // Before the form: nobody should fill it all in to be told they can't send.
+    if (!hasEntry('proposal') && hasTicket('proposal')) {
+      // Tonight's place was already used by an earlier invitation. Sending
+      // the member to pay again only bounced them back here, forever.
+      Alert.alert(
+        "Tonight's invitation is sent",
+        'You can send one invitation per evening. Come back tomorrow from 19:00 to send another.',
+      );
+      return;
+    }
     if (!validateForm()) return;
+    if (!hasEntry('proposal')) {
+      resumeSend.current = true;
+      router.push({ pathname: '/pay/[mode]', params: { mode: 'proposal', back: '1' } });
+      return;
+    }
+    resumeSend.current = false;
     setLoading(true);
     try {
       const resolvedVenue = resolveVenue();
@@ -340,12 +366,32 @@ export default function CreateProposalScreen() {
         [{ text: 'Done', onPress: () => (router.canGoBack() ? router.back() : router.replace('/(tabs)')) }],
       );
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to send proposal');
+      // The server refused because tonight's place is gone (used, or the
+      // evening closed): say that, and bring the phone's copy up to date.
+      if (/NO_ENTRY/.test(String(error?.message))) {
+        useTokensStore.getState().refresh().catch(() => {});
+        Alert.alert(
+          "Tonight's place isn't available",
+          'You can send one invitation per evening, during the evening window. Come back tomorrow from 19:00.',
+        );
+      } else {
+        Alert.alert('Could not send', error.message || 'Failed to send proposal');
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // Back from paying for tonight: finish the send the member already asked
+  // for, rather than leave them on an unsent draft wondering if it went.
+  const sendRef = useRef(handleSend);
+  sendRef.current = handleSend;
+  useFocusEffect(useCallback(() => {
+    if (resumeSend.current && useTokensStore.getState().hasEntry('proposal')) {
+      resumeSend.current = false;
+      sendRef.current();
+    }
+  }, []));
   if (notAProposer) return blockedView;
 
   return (
@@ -417,6 +463,7 @@ export default function CreateProposalScreen() {
                               {isOn ? 'Selected' : 'Propose to ' + r.name.split(' ')[0]}
                             </Text>
                           </TouchableOpacity>
+                          <ReportBlockLink name={r.name.split(' ')[0]} onPress={() => setSafetyFor(r)} />
                         </View>
                       }
                     />
@@ -640,6 +687,14 @@ export default function CreateProposalScreen() {
           if (previewing) setSelectedRecipient(previewing);
           setPreviewing(null);
         }}
+        safetyTarget={previewing ? { name: previewing.name.split(' ')[0], userId: previewing.id } : undefined}
+        onSafetyDone={() => previewing && dropMember(previewing)}
+      />
+
+      <SafetySheet
+        target={safetyFor ? { name: safetyFor.name.split(' ')[0], userId: safetyFor.id } : null}
+        onClose={() => setSafetyFor(null)}
+        onDone={() => safetyFor && dropMember(safetyFor)}
       />
     </KeyboardAvoidingView>
   );

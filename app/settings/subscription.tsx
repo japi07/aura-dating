@@ -12,11 +12,10 @@ import type { PlanId } from '@/lib/purchases';
 
 const PERKS = [
   { icon: 'mail', title: '5 proposals per day', desc: 'Get more options without sacrificing curation' },
-  { icon: 'eye-off', title: 'Incognito mode', desc: 'Browse anonymously when you choose' },
   { icon: 'sparkles', title: 'Priority matching', desc: 'Verified Gold profiles get curated first every day' },
   { icon: 'star', title: 'See who proposed', desc: 'Preview new proposals before opening them' },
   { icon: 'flash', title: '1 instant date weekly', desc: 'Skip the queue with a curated same-day match' },
-  { icon: 'ticket', title: 'Exclusive events', desc: 'Members-only group events & dinners' },
+
 ];
 
 // Fallback display when live store prices aren't loaded yet (e.g. before the

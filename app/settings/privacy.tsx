@@ -182,7 +182,7 @@ export default function PrivacyScreen() {
           <View style={styles.card}>
             <ToggleRow icon="time" label="Show last active" desc="Let others see when you're online" value={showLastSeen} onChange={setShowLastSeen} border />
             <ToggleRow icon="checkmark-done" label="Read receipts on proposals" desc="Senders see when you've viewed their proposal" value={readReceipts} onChange={setReadReceipts} border />
-            <ToggleRow icon="eye-off" label="Incognito mode" desc="Browse profiles without being seen" value={incognito} onChange={setIncognito} premium />
+            {/* Incognito returns when the members list actually honours it. */}
           </View>
         </View>
 

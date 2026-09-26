@@ -69,6 +69,8 @@ export default function RootLayout() {
    * so a removal takes effect without waiting for a restart.
    */
   const [safety, setSafety] = useState<SafetyState | null | undefined>(undefined);
+  /** Latest-wins ticket for safety state writes. See the check below. */
+  const safetySeq = React.useRef(0);
   const hydrateProposals = useProposalsStore((s) => s.hydrate);
   const hydrateDates = useDatesStore((s) => s.hydrate);
   const hydrateSettings = useSettingsStore((s) => s.hydrate);
@@ -127,16 +129,16 @@ export default function RootLayout() {
     return () => clearTimeout(failsafe);
   }, []);
 
+  const userId = user?.id;
+
+  // Once per signed-in member, not once per change to their profile object.
+  // This used to depend on `user` and end with setUser(fresh), which changed
+  // `user` and ran it again, forever.
   useEffect(() => {
-    if (!token || !user) return;
-    upsertUser(user);
+    if (!token || !userId) return;
+    const current = useAuthStore.getState().user;
+    if (current) upsertUser(current);
     (async () => {
-      const pushToken = await registerForPushNotifications();
-      if (pushToken) {
-        try { await savePushTokenToServer(pushToken); } catch { /* offline — retried next launch */ }
-      }
-      await scheduleWindowOpenReminder();
-      await hydrateSubscription();
       // Re-read our own profile from the server. A stale local copy of
       // gender / genderInterest silently filters the wrong people out of
       // Discover, which is very hard to diagnose from the UI.
@@ -145,20 +147,21 @@ export default function RootLayout() {
         if (fresh) setUser(fresh);
       } catch { /* offline — keep the cached profile */ }
     })();
-  }, [token, user]);
-
-  const userId = user?.id;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, userId]);
   useEffect(() => {
     if (!token || !userId) { setSafety(undefined); return; }
     let active = true;
     const cacheKey = `aura.termsAccepted.${userId}`;
 
     const check = async () => {
+      const ticket = ++safetySeq.current;
+      const current = () => active && ticket === safetySeq.current;
       // A member who already agreed on this phone gets straight in; the
       // server's answer still arrives and wins, which is how a ban lands.
       try {
         if ((await AsyncStorage.getItem(cacheKey)) === TERMS_VERSION) {
-          if (active) setSafety((prev) => prev ?? { termsAcceptedAt: 'cached', termsVersion: TERMS_VERSION, bannedAt: null });
+          if (current()) setSafety((prev) => prev ?? { termsAcceptedAt: 'cached', termsVersion: TERMS_VERSION, bannedAt: null });
         }
       } catch { /* no cache */ }
 
@@ -167,14 +170,14 @@ export default function RootLayout() {
           fetchMySafetyState(),
           new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
         ]);
-        if (!active) return;
+        if (!current()) return;
         setSafety(state ?? { termsAcceptedAt: null, termsVersion: null, bannedAt: null });
         if (termsCurrent(state) && !state?.bannedAt) AsyncStorage.setItem(cacheKey, TERMS_VERSION).catch(() => {});
         else AsyncStorage.removeItem(cacheKey).catch(() => {});
       } catch {
         // Offline with nothing cached: ask. Agreeing needs the network anyway,
         // and the gate says so if it fails.
-        if (active) setSafety((prev) => prev ?? { termsAcceptedAt: null, termsVersion: null, bannedAt: null });
+        if (current()) setSafety((prev) => prev ?? { termsAcceptedAt: null, termsVersion: null, bannedAt: null });
       }
     };
 
@@ -182,6 +185,20 @@ export default function RootLayout() {
     const sub = AppState.addEventListener('change', (next) => { if (next === 'active') check(); });
     return () => { active = false; sub.remove(); };
   }, [token, userId]);
+
+  const cleared = !!safety && termsCurrent(safety) && !safety.bannedAt;
+  useEffect(() => {
+    if (!token || !userId || !cleared) return;
+    (async () => {
+      const pushToken = await registerForPushNotifications();
+      if (pushToken) {
+        try { await savePushTokenToServer(pushToken); } catch { /* offline — retried next launch */ }
+      }
+      await scheduleWindowOpenReminder();
+      await hydrateSubscription();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, userId, cleared]);
 
   const signOutFromGate = async () => {
     await logout();
@@ -202,18 +219,22 @@ export default function RootLayout() {
     if (safety === undefined) return <BootSplash />;
     if (safety?.bannedAt) {
       return (
-        <SafeAreaProvider>
-          <StatusBar style="dark" backgroundColor={COLORS.BG} />
-          <AccountSuspended onSignOut={signOutFromGate} />
-        </SafeAreaProvider>
+        <BootErrorBoundary>
+          <SafeAreaProvider>
+            <StatusBar style="dark" backgroundColor={COLORS.BG} />
+            <AccountSuspended onSignOut={signOutFromGate} />
+          </SafeAreaProvider>
+        </BootErrorBoundary>
       );
     }
     if (!termsCurrent(safety)) {
       return (
+        <BootErrorBoundary>
         <SafeAreaProvider>
           <StatusBar style="dark" backgroundColor={COLORS.BG} />
           <TermsGate
             onAccepted={(state) => {
+              safetySeq.current += 1; // anything still in flight is now stale
               setSafety(state);
               if (userId && termsCurrent(state)) {
                 AsyncStorage.setItem(`aura.termsAccepted.${userId}`, TERMS_VERSION).catch(() => {});
@@ -222,6 +243,7 @@ export default function RootLayout() {
             onSignOut={signOutFromGate}
           />
         </SafeAreaProvider>
+        </BootErrorBoundary>
       );
     }
   }
@@ -274,8 +296,6 @@ export default function RootLayout() {
         <Stack.Screen name="meet/blind" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="meet/call" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="meet/proposals" options={{ animation: 'slide_from_right' }} />
-&
-&
         <Stack.Screen name="wallet" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="ops/index" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="ops/reports" options={{ animation: 'slide_from_right' }} />

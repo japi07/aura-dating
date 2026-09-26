@@ -7,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
 import type { MemberCardPerson } from './MemberCard';
-import { SafetySheet, type SafetyOutcome } from './SafetySheet';
+import { SafetySheet, ReportBlockLink, type SafetyOutcome } from './SafetySheet';
 import type { SafetyTarget } from '@/lib/safety-supabase';
 
 const { width: SW } = Dimensions.get('window');
@@ -164,6 +164,10 @@ export function MemberDetailSheet({
               <Text style={styles.emptyNote}>
                 {person.name.split(' ')[0]} hasn't filled in their profile yet.
               </Text>
+            )}
+
+            {safetyTarget && (
+              <ReportBlockLink name={person.name.split(' ')[0]} onPress={() => setSafetyOpen(true)} />
             )}
           </View>
         </ScrollView>

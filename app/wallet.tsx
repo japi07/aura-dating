@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '@/constants/colors';
 import { useTokensStore } from '@/store/tokens';
-import { useSubscriptionStore } from '@/store/subscription';
+import { useSubscriptionStore, useGoldOnSale } from '@/store/subscription';
 import {
   fetchTokenHistory, describeReason, MODE_LABEL, MODE_EMOJI,
   fetchPackContents, awaitPurchasedTokens,
@@ -32,6 +32,7 @@ export default function WalletScreen() {
   const router = useRouter();
   const { balance, prices, entries, isHydrated, hydrate, refresh } = useTokensStore();
   const isGold = useSubscriptionStore((st) => st.isGold);
+  const goldOnSale = useGoldOnSale();
 
   const [history, setHistory] = useState<LedgerRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -203,7 +204,7 @@ export default function WalletScreen() {
             </>
           )}
 
-          {!isGold && (
+          {!isGold && goldOnSale && (
             <TouchableOpacity
               style={s.upsell}
               onPress={() => router.push('/settings/subscription')}

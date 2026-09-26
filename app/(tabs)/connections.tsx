@@ -14,6 +14,7 @@ import { openInMaps } from '@/lib/maps';
 import { addDateToCalendar } from '@/lib/calendar';
 import { cancelReminders } from '@/lib/notifications';
 import { formatDate, formatTime, formatCountdown, paymentLabel } from '@/lib/format';
+import { SafetySheet, ReportBlockLink } from '@/components/SafetySheet';
 
 const TABS = ['Upcoming', 'Past'] as const;
 type Tab = typeof TABS[number];
@@ -22,6 +23,11 @@ export default function DatesScreen() {
   const router = useRouter();
   const { dates, hydrate, upcoming, past, cancelDate, rateDate, setDateInterest } = useDatesStore();
   const [tab, setTab] = useState<Tab>('Upcoming');
+  const [safetyFor, setSafetyFor] = useState<ConfirmedDate | null>(null);
+  const safetyName = (d: ConfirmedDate) =>
+    d.mode === 'blind' ? 'your date' : (d.with?.name?.split(' ')[0] || 'your date');
+  // Only dates the server knows about can be reported by id.
+  const reportable = (d: ConfirmedDate) => !d.id.startsWith('date_');
   // Whether each side has posted their availability, keyed by date id. The
   // roadmap is a lie without this — someone who already sent their times
   // would keep being told to send them.
@@ -312,6 +318,10 @@ export default function DatesScreen() {
                         Meet in public · Share live location with a friend · SOS in Profile › Safety
                       </Text>
                     </View>
+
+                    {reportable(d) && (
+                      <ReportBlockLink name={safetyName(d)} onPress={() => setSafetyFor(d)} />
+                    )}
                   </View>
                 </View>
               );
@@ -434,6 +444,10 @@ export default function DatesScreen() {
                     </Text>
                   </View>
                 )}
+
+                {reportable(d) && (
+                  <ReportBlockLink name={safetyName(d)} onPress={() => setSafetyFor(d)} />
+                )}
               </View>
             ))
           )
@@ -446,6 +460,16 @@ export default function DatesScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      <SafetySheet
+        target={safetyFor ? { name: safetyName(safetyFor), dateId: safetyFor.id } : null}
+        onClose={() => setSafetyFor(null)}
+        onDone={() => {
+          const id = safetyFor?.id;
+          if (id) useDatesStore.setState((st: any) => ({ dates: st.dates.filter((x: ConfirmedDate) => x.id !== id) }));
+          useDatesStore.getState().refreshDates().catch(() => {});
+        }}
+      />
     </SafeAreaView>
   );
 }

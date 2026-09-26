@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '@/constants/colors';
@@ -26,7 +26,8 @@ const MODES: DateMode[] = ['call', 'blind', 'proposal'];
  * button until seven — threw that intent away.
  */
 export default function PayScreen() {
-  const { mode: raw } = useLocalSearchParams<{ mode: string }>();
+  const { mode: raw, back } = useLocalSearchParams<{ mode: string; back?: string }>();
+  const returnToDraft = back === '1';
   const router = useRouter();
   const w = useDailyWindow();
 
@@ -38,6 +39,17 @@ export default function PayScreen() {
   } = useTokensStore();
 
   const [paying, setPaying] = useState(false);
+  const navigation = useNavigation();
+  // A swipe-down or back mid-purchase used to leave, and the router.back()
+  // after the purchase then closed the screen underneath -- the draft with it.
+  // A ref, not state: our own navigation right after buy() must get through
+  // in the same tick, before any re-render.
+  const payingRef = React.useRef(false);
+  useEffect(() => navigation.addListener('beforeRemove' as any, (e: any) => {
+    if (payingRef.current) e.preventDefault();
+  }), [navigation]);
+  // The native swipe-to-dismiss doesn't ask beforeRemove, so switch it off too.
+  useEffect(() => { navigation.setOptions({ gestureEnabled: !paying } as any); }, [navigation, paying]);
   const price = prices[mode] ?? 1;
   const already = hasEntry(mode);
   const short = balance < price;
@@ -57,23 +69,30 @@ export default function PayScreen() {
 
   const onPay = async () => {
     setPaying(true);
+    payingRef.current = true;
     try {
       await buy(mode);
-      router.replace(destination as any);
+      payingRef.current = false;
+      if (!navigation.isFocused()) return;
+      // Opened from a finished draft (the proposal composer): go back to it,
+      // draft intact, rather than to the list it started from.
+      if (returnToDraft && router.canGoBack()) router.back();
+      else router.replace(destination as any);
     } catch (e: any) {
       if (e instanceof NotEnoughTokens || e?.name === 'NotEnoughTokens') {
         Alert.alert(
           'Not enough tokens',
-          'You have run out for now. Tokens come with a subscription, or you can buy more.',
+          'You have run out for now. You can buy more in your wallet.',
           [
             { text: 'Not now', style: 'cancel' },
-            { text: 'See plans', onPress: () => router.push('/wallet') },
+            { text: 'Open wallet', onPress: () => router.push('/wallet') },
           ],
         );
       } else {
         Alert.alert('Could not confirm', e?.message || 'Please try again.');
       }
     } finally {
+      payingRef.current = false;
       setPaying(false);
     }
   };
@@ -84,7 +103,9 @@ export default function PayScreen() {
 
       <View style={s.header}>
         <TouchableOpacity
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+          // Not while paying: closing mid-purchase dropped the composer's draft.
+          onPress={() => { if (paying) return; router.canGoBack() ? router.back() : router.replace('/(tabs)'); }}
+          disabled={paying}
           style={s.backBtn}
         >
           <Ionicons name="close" size={26} color={COLORS.TEXT} />
@@ -154,7 +175,7 @@ export default function PayScreen() {
               </View>
               <TouchableOpacity
                 style={s.primaryBtn}
-                onPress={() => router.replace(destination as any)}
+                onPress={() => (returnToDraft && router.canGoBack() ? router.back() : router.replace(destination as any))}
                 activeOpacity={0.88}
               >
                 <Text style={s.primaryText}>Continue</Text>

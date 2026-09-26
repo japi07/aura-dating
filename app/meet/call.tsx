@@ -21,6 +21,8 @@ import {
 import { WindowClosedNotice, useDailyWindow } from '@/components/WindowCountdown';
 import { useTokensStore } from '@/store/tokens';
 import { SafetySheet } from '@/components/SafetySheet';
+import { AnonymousSafetyCard } from '@/components/AnonymousSafetyCard';
+import type { SafetyTarget } from '@/lib/safety-supabase';
 
 type Phase = 'intro' | 'waiting' | 'connecting' | 'live' | 'outcome' | 'done';
 
@@ -52,8 +54,12 @@ export default function CallScreen() {
   const [partnerHere, setPartnerHere] = useState(false);
   const [busy, setBusy] = useState(false);
   const [outcomeDateId, setOutcomeDateId] = useState<string | null>(null);
-  /** Report/block sheet. Works from the call id alone: the app never learns who they are. */
-  const [safetyOpen, setSafetyOpen] = useState(false);
+  /**
+   * Report/block sheet. Works from the call id alone: the app never learns
+   * who they are. Held as its own state, not derived from `call`, so it
+   * survives the call ending underneath it.
+   */
+  const [safetyTarget, setSafetyTarget] = useState<SafetyTarget | null>(null);
   const [myAnswer, setMyAnswer] = useState<boolean | null>(null);
 
   const session = useRef<CallSession | null>(null);
@@ -63,6 +69,13 @@ export default function CallScreen() {
   // leave() fires the left-meeting event, so finishing would otherwise
   // re-enter itself once through the handler.
   const ending = useRef(false);
+  /**
+   * Set when the call ends because of a report or block. The room still fires
+   * "left" as it closes, and without this finishCall would then move to the
+   * "how was it?" outcome after the screen had already been reset -- with no
+   * call to render, which left a blank screen.
+   */
+  const silentEnd = useRef(false);
   const phaseRef = useRef<Phase>('intro');
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 
@@ -138,6 +151,7 @@ export default function CallScreen() {
   const connect = useCallback(async (state: CallState) => {
     if (!callTransportAvailable) return;
     ending.current = false;
+    silentEnd.current = false;
     startedRef.current = false;
     liveCallId.current = state.id;
     setPhase('connecting');
@@ -189,16 +203,18 @@ export default function CallScreen() {
     if (ending.current) return;
     ending.current = true;
     liveCallId.current = null;
-    await markCallEnded(callId);
+    // Leave the room first, then tell the server. The other way round kept
+    // both people talking for a network round trip after End & report.
     const s = session.current;
     session.current = null;
-    if (s) { await s.leave(); await s.destroy(); }
+    if (s) { await s.leave().catch(() => {}); await s.destroy().catch(() => {}); }
+    await markCallEnded(callId);
 
     // Only ask about a call that happened. A join that Daily refused still
     // reaches here via the error handler, and asking "how was it, would you
     // like to meet them" about a conversation nobody had is nonsense -- and
     // it records a real answer about a stranger you never heard.
-    if (!startedRef.current) {
+    if (!startedRef.current || silentEnd.current) {
       setPhase('intro');
       return;
     }
@@ -231,6 +247,7 @@ export default function CallScreen() {
   // Reported or blocked: the server has already ended the call for both of
   // you. Leave the room, and don't ask whether they'd like to meet.
   const afterSafety = useCallback(() => {
+    silentEnd.current = true;
     teardown();
     setCall(null);
     setPartnerHere(false);
@@ -238,6 +255,16 @@ export default function CallScreen() {
     setOutcomeDateId(null);
     setPhase('intro');
   }, [teardown]);
+
+  // Reporting mid-call hangs up first. Someone being abused should not have
+  // to keep hearing them while they pick a reason and type what happened.
+  const endAndReport = useCallback(async () => {
+    if (!call) return;
+    const target = { name: call.otherName, callId: call.id };
+    silentEnd.current = true;
+    setSafetyTarget(target);
+    await finishCall(call.id);
+  }, [call, finishCall]);
 
   /* ─── background: a call keeps running, a queue place does not ─── */
   useEffect(() => {
@@ -370,7 +397,7 @@ export default function CallScreen() {
         <Intro
           available={callTransportAvailable}
           paid={hasTicket('call')}
-          onPay={() => router.push('/pay/call')}
+          onPay={() => router.push({ pathname: '/pay/[mode]', params: { mode: 'call', back: '1' } })}
           windowOpen={w.open}
           secondsUntilOpen={w.secondsUntilOpen}
           queueSize={queueSize}
@@ -399,12 +426,17 @@ export default function CallScreen() {
           onMute={toggleMute}
           onSpeaker={toggleSpeaker}
           onEnd={endCall}
-          onReport={() => setSafetyOpen(true)}
+          onReport={endAndReport}
         />
       )}
 
       {phase === 'outcome' && call && (
-        <Outcome name={call.otherName} busy={busy} onAnswer={answer} onReport={() => setSafetyOpen(true)} />
+        <Outcome
+          name={call.otherName}
+          busy={busy}
+          onAnswer={answer}
+          onReport={() => setSafetyTarget({ name: call.otherName, callId: call.id })}
+        />
       )}
 
       {phase === 'done' && (
@@ -414,13 +446,20 @@ export default function CallScreen() {
           dateId={outcomeDateId}
           onDates={() => router.replace('/(tabs)/connections')}
           onAgain={() => { setCall(null); setPartnerHere(false); setPhase('intro'); }}
-          onReport={call ? () => setSafetyOpen(true) : undefined}
+          onReport={call ? () => setSafetyTarget({ name: call.otherName, callId: call.id }) : undefined}
         />
       )}
 
+      {/* Belt and braces: an outcome with no call to show would be a blank screen. */}
+      {(phase === 'outcome' || phase === 'live') && !call && (
+        <View style={s.centered}>
+          <ActivityIndicator color={COLORS.BRAND} />
+        </View>
+      )}
+
       <SafetySheet
-        target={safetyOpen && call ? { name: call.otherName, callId: call.id } : null}
-        onClose={() => setSafetyOpen(false)}
+        target={safetyTarget}
+        onClose={() => setSafetyTarget(null)}
         onDone={afterSafety}
       />
     </SafeAreaView>
@@ -463,6 +502,8 @@ function Intro({
           find out you said yes.
         </Text>
       </View>
+
+      <AnonymousSafetyCard mode="call" />
 
       {available && !paid ? (
         <TouchableOpacity style={s.primaryBtn} onPress={onPay} activeOpacity={0.88}>
@@ -537,6 +578,9 @@ function Waiting({ queueSize, onCancel }: { queueSize: number; onCancel: () => v
       <TouchableOpacity style={s.cancelBtn} onPress={onCancel}>
         <Text style={s.cancelText}>Leave the queue</Text>
       </TouchableOpacity>
+      <View style={{ alignSelf: 'stretch', paddingHorizontal: 24, marginTop: 24 }}>
+        <AnonymousSafetyCard mode="call" />
+      </View>
     </View>
   );
 }
@@ -554,10 +598,10 @@ function Live({ name, partnerHere, remaining, muted, speaker, onMute, onSpeaker,
         style={s.liveReport}
         onPress={onReport}
         activeOpacity={0.8}
-        accessibilityLabel="Report or block this caller"
+        accessibilityLabel="End the call and report or block this caller"
       >
         <Ionicons name="flag" size={14} color="#fff" />
-        <Text style={s.liveReportText}>Report</Text>
+        <Text style={s.liveReportText}>End & report</Text>
       </TouchableOpacity>
       <View style={s.liveTop}>
         <Text style={s.liveName}>{name}</Text>

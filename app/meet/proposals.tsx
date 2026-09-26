@@ -16,7 +16,7 @@ import { useDatesStore } from '@/store/dates';
 import { getCurrentLocation, distanceKm, formatDistance } from '@/lib/location';
 import { scheduleDateReminders } from '@/lib/notifications';
 import { addDateToCalendar } from '@/lib/calendar';
-import { SafetySheet } from '@/components/SafetySheet';
+import { SafetySheet, ReportBlockLink } from '@/components/SafetySheet';
 import { iconForMime } from '@/lib/attachment-picker';
 import { canSendProposals } from '@/lib/roles';
 import {
@@ -432,6 +432,11 @@ export default function ProposalsScreen() {
                     <Text style={styles.acceptText}>Accept date</Text>
                   </TouchableOpacity>
                 </View>
+
+                <ReportBlockLink
+                  name={proposal.from.name.split(' ')[0]}
+                  onPress={() => handleSafetyMenu(proposal)}
+                />
               </View>
             </Animated.View>
           )}
@@ -511,7 +516,13 @@ export default function ProposalsScreen() {
           ...(safetyFor.id.startsWith('prop_') ? { userId: safetyFor.from.id } : { proposalId: safetyFor.id }),
         } : null}
         onClose={() => setSafetyFor(null)}
-        onDone={() => { refreshProposals().catch(() => {}); }}
+        onDone={() => {
+          // Gone now, not after the next successful refresh. The server has
+          // already hidden it; this just stops it lingering on a slow network.
+          const id = safetyFor?.id;
+          if (id) useProposalsStore.setState((st: any) => ({ proposals: st.proposals.filter((x: Proposal) => x.id !== id) }));
+          refreshProposals().catch(() => {});
+        }}
       />
 
       {/* Which of his offered slots suits her */}

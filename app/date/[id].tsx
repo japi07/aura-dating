@@ -44,6 +44,7 @@ export default function DateDetailScreen() {
   const safetyName = date?.mode === 'blind' ? 'your date' : (date?.with.name?.split(' ')[0] || 'your date');
 
   const afterSafety = async () => {
+    useDatesStore.setState((st: any) => ({ dates: st.dates.filter((d: any) => d.id !== id) }));
     await refreshDates().catch(() => {});
     router.canGoBack() ? router.back() : router.replace('/(tabs)/connections');
   };
@@ -178,11 +179,12 @@ export default function DateDetailScreen() {
         <Text style={s.title}>Your date</Text>
         {reportable ? (
           <TouchableOpacity
-            style={s.backBtn}
+            style={s.headerReport}
             onPress={() => setSafetyOpen(true)}
             accessibilityLabel={`Report or block ${safetyName}`}
           >
-            <Ionicons name="ellipsis-horizontal" size={22} color={COLORS.TEXT} />
+            <Ionicons name="flag-outline" size={16} color={COLORS.ERROR} />
+            <Text style={s.headerReportText}>Report</Text>
           </TouchableOpacity>
         ) : (
           <View style={{ width: 40 }} />
@@ -325,6 +327,11 @@ export default function DateDetailScreen() {
 }
 
 const s = StyleSheet.create({
+  headerReport: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 40, paddingHorizontal: 12,
+    borderRadius: 20, backgroundColor: COLORS.ERROR_LIGHT,
+  },
+  headerReportText: { fontSize: 13, fontWeight: '800', color: COLORS.ERROR },
   container: { flex: 1, backgroundColor: COLORS.BG },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {

@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '@/store/auth';
 import { profileApi } from '@/lib/api';
 import { updateMyProfile } from '@/lib/profile-supabase';
+import { TEXT_REJECTED_MESSAGE } from '@/lib/safety-supabase';
 import { getSessionUserId } from '@/lib/proposals-supabase';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -109,31 +110,27 @@ export default function OnboardingScreen() {
   const handleComplete = async () => {
     setLoading(true);
     const age = computeAge(birthday);
+    const fields = {
+      age, birthday, city, bio,
+      gender: gender.toLowerCase(),
+      genderInterest: genderInterest.toLowerCase(),
+      interests: selectedInterests,
+    };
+    const markCompleteLocally = () => {
+      if (user) setUser({ ...user, profileComplete: true, ...fields, photoUrl: photoUri || user.photoUrl });
+    };
 
-    // Always update the local store first — that's the source of truth for the UI.
-    // Then attempt to sync with the backend; if it fails we still proceed.
-    if (user) {
-      setUser({
-        ...user,
-        profileComplete: true,
-        age, birthday, city, bio,
-        gender: gender.toLowerCase(),
-        genderInterest: genderInterest.toLowerCase(),
-        interests: selectedInterests,
-        photoUrl: photoUri || user.photoUrl,
-      });
-    }
-
+    // Save first, and only then mark the profile complete here. Marking it
+    // complete swaps this screen out for the app straight away, so doing it
+    // before the save meant a refused bio came back to a fresh onboarding,
+    // every field empty.
     try {
       const signedIn = await getSessionUserId();
       if (signedIn) {
         // Persist to Supabase — crucially sets profile_complete = true so the
         // user isn't sent back through onboarding on their next login.
         await updateMyProfile({
-          birthday, age, city, bio,
-          gender: gender.toLowerCase(),
-          genderInterest: genderInterest.toLowerCase(),
-          interests: selectedInterests,
+          ...fields,
           photoUrl: photoUri || undefined,
           profileComplete: true,
         });
@@ -143,12 +140,36 @@ export default function OnboardingScreen() {
           birthday, gender, genderInterest, city, bio, interests: selectedInterests,
         });
       }
-    } catch {
-      // Backend not reachable — local state already saved; will re-sync later
-    } finally {
-      setLoading(false);
-      router.replace('/');
+    } catch (e: any) {
+      const msg = String(e?.message || '');
+      if (msg === TEXT_REJECTED_MESSAGE) {
+        setLoading(false);
+        setErrors({ bio: "Please reword this. It contains language that isn't allowed on Aura." });
+        setStep(2);
+        Alert.alert('Not allowed on Aura', TEXT_REJECTED_MESSAGE);
+        return;
+      }
+      if (/content guidelines/i.test(msg)) {
+        setLoading(false);
+        setPhotoUri(null);
+        setStep(1);
+        Alert.alert('Please choose another photo', msg);
+        return;
+      }
+      const offline = /network|fetch|timeout|timed out|offline/i.test(msg) || e?.name === 'TypeError';
+      if (!offline) {
+        // The server said no for some other reason. Saying so beats letting
+        // them in with a profile the server never saved, which only sends
+        // them back through an empty onboarding on the next launch.
+        setLoading(false);
+        Alert.alert('Could not save your profile', msg || 'Please try again.');
+        return;
+      }
+      // Backend not reachable — keep the profile locally; it re-syncs later.
     }
+    markCompleteLocally();
+    setLoading(false);
+    router.replace('/');
   };
 
   const titles = ['The Basics', 'Your Personality', 'Your Preferences'];

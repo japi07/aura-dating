@@ -13,6 +13,7 @@ import { COLORS } from '@/constants/colors';
 import { MemberCard } from '@/components/MemberCard';
 import { canSendProposals } from '@/lib/roles';
 import { amIAdmin } from '@/lib/ops-supabase';
+import { useGoldOnSale, useSubscriptionStore } from '@/store/subscription';
 
 const SW = Dimensions.get('window').width;
 
@@ -21,6 +22,14 @@ export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
   const proposals = useProposalsStore((s) => s.proposals);
   const dates = useDatesStore((s) => s.dates);
+
+  // Every hook sits above the early return below, so the hook count never changes.
+  // The concierge console is hidden entirely unless the account is flagged as
+  // ops — members never see a row they cannot open.
+  const [isOps, setIsOps] = useState(false);
+  useEffect(() => { amIAdmin().then(setIsOps).catch(() => setIsOps(false)); }, []);
+  const goldOnSale = useGoldOnSale();
+  const isGoldMember = useSubscriptionStore((st) => st.isGold);
 
   // If for any reason we land on Profile without a logged-in user, send them
   // back to login. There is no demo profile any more.
@@ -89,10 +98,6 @@ export default function ProfileScreen() {
     ]);
   };
 
-  // The concierge console is hidden entirely unless the account is flagged as
-  // ops — members never see a row they cannot open.
-  const [isOps, setIsOps] = useState(false);
-  useEffect(() => { amIAdmin().then(setIsOps).catch(() => setIsOps(false)); }, []);
 
   const settings = [
     // Sending is for proposers only — women receive proposals rather than send
@@ -102,8 +107,10 @@ export default function ProfileScreen() {
     { icon: 'options-outline', label: 'Date preferences', desc: 'Types, days, distance, age range', color: '#FF9F43', route: '/settings/preferences' },
     { icon: 'notifications-outline', label: 'Notifications', desc: 'Manage all alerts', color: '#FF6B81', route: '/settings/notifications' },
     { icon: 'eye-outline', label: 'Privacy', desc: 'Visibility & data', color: '#2B9FFF', route: '/settings/privacy' },
-    { icon: 'shield-outline', label: 'Safety center', desc: 'SOS, blocked, safety tips', color: '#25D997', route: '/settings/safety' },
-    { icon: 'diamond-outline', label: 'Aura Gold', desc: 'Premium membership', color: '#FFCF40', route: '/settings/subscription', highlight: true },
+    { icon: 'shield-outline', label: 'Safety', desc: 'Report someone, blocked members, SOS', color: '#25D997', route: '/settings/safety' },
+    ...(goldOnSale || isGoldMember
+      ? [{ icon: 'diamond-outline', label: 'Aura Gold', desc: 'Premium membership', color: '#FFCF40', route: '/settings/subscription', highlight: true }]
+      : []),
     { icon: 'help-circle-outline', label: 'Help & Support', desc: 'FAQ & contact us', color: '#A78BFA', route: '/settings/help' },
     ...(isOps
       ? [
@@ -190,7 +197,7 @@ export default function ProfileScreen() {
                 </View>
               </View>
               <Text style={styles.verifyDesc}>
-                Quick biometric check. Verified profiles get 4× more proposals.
+                Quick biometric check. Verified members show a badge on their profile.
               </Text>
               <View style={styles.verifyCtaRow}>
                 <Text style={styles.verifyCtaText}>Verify now</Text>

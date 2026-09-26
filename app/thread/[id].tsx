@@ -13,6 +13,8 @@ import { COLORS } from '@/constants/colors';
 import { fetchThread, sendThreadMessage, type ThreadMessage } from '@/lib/messages-supabase';
 import { SafetySheet } from '@/components/SafetySheet';
 import { useProposalsStore } from '@/store/proposals';
+import { useDatesStore } from '@/store/dates';
+import { deleteMyMessage } from '@/lib/safety-supabase';
 import { pickAttachment, iconForMime, type PickedAttachment } from '@/lib/attachment-picker';
 
 const MAX_VIDEO_SEC = 30;
@@ -50,6 +52,26 @@ export default function ThreadScreen() {
     setRefreshing(true);
     await load();
     setRefreshing(false);
+  };
+
+  const removeMine = (m: ThreadMessage) => {
+    Alert.alert('Delete this message?', `It disappears for ${other.split(' ')[0]} too.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          setMessages((list) => list.filter((x) => x.id !== m.id));
+          try {
+            await deleteMyMessage(m.id);
+          } catch (e: any) {
+            // Re-read rather than restore a snapshot another delete may have changed.
+            load();
+            Alert.alert('Could not delete', e?.message || 'Please try again.');
+          }
+        },
+      },
+    ]);
   };
 
   const recordVideo = async () => {
@@ -106,12 +128,17 @@ export default function ThreadScreen() {
   const other = name || 'them';
   const [safetyOpen, setSafetyOpen] = useState(false);
   const refreshProposals = useProposalsStore((st) => st.refreshProposals);
+  const refreshDates = useDatesStore((st) => st.refreshDates);
   // A thread that only exists on this device has nothing on the server to report against.
   const reportable = !proposalId.startsWith('prop_');
 
-  // Reported or blocked: this conversation is gone for both of you.
+  // Reported or blocked: this conversation, and any date it led to, is gone
+  // for both of you. Drop the date here too rather than leave its card on
+  // the Dates tab until the next refresh.
   const afterSafety = async () => {
-    await refreshProposals().catch(() => {});
+    useDatesStore.setState((st: any) => ({ dates: st.dates.filter((d: any) => d.proposalId !== proposalId) }));
+    useProposalsStore.setState((st: any) => ({ proposals: st.proposals.filter((p: any) => p.id !== proposalId) }));
+    await Promise.all([refreshProposals().catch(() => {}), refreshDates().catch(() => {})]);
     router.canGoBack() ? router.back() : router.replace('/(tabs)');
   };
 
@@ -129,11 +156,12 @@ export default function ThreadScreen() {
         </View>
         {reportable && (
           <TouchableOpacity
-            style={styles.backBtn}
+            style={styles.headerReport}
             onPress={() => setSafetyOpen(true)}
             accessibilityLabel={`Report or block ${other}`}
           >
-            <Ionicons name="ellipsis-horizontal" size={22} color={COLORS.TEXT} />
+            <Ionicons name="flag-outline" size={16} color={COLORS.ERROR} />
+            <Text style={styles.headerReportText}>Report</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -164,7 +192,14 @@ export default function ThreadScreen() {
               </Text>
             </View>
           ) : (
-            messages.map((m) => <MessageBubble key={m.id} m={m} />)
+            messages.map((m) => (
+              <MessageBubble
+                key={m.id}
+                m={m}
+                onDelete={m.mine ? () => removeMine(m) : undefined}
+                onReport={!m.mine && reportable ? () => setSafetyOpen(true) : undefined}
+              />
+            ))
           )}
         </ScrollView>
 
@@ -233,7 +268,9 @@ export default function ThreadScreen() {
   );
 }
 
-function MessageBubble({ m }: { m: ThreadMessage }) {
+function MessageBubble({ m, onDelete, onReport }: {
+  m: ThreadMessage; onDelete?: () => void; onReport?: () => void;
+}) {
   const player = useVideoPlayer(m.videoUrl ?? '', (p) => { p.loop = false; });
 
   return (
@@ -277,12 +314,31 @@ function MessageBubble({ m }: { m: ThreadMessage }) {
           <Text style={[styles.caption, m.mine && { color: '#fff' }]}>{m.caption}</Text>
         )}
       </View>
+
+      {(onDelete || onReport) && (
+        <TouchableOpacity
+          style={[styles.msgAction, m.mine && { alignSelf: 'flex-end' }]}
+          onPress={onDelete ?? onReport}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel={onDelete ? 'Delete this message' : 'Report this message'}
+        >
+          <Ionicons name={onDelete ? 'trash-outline' : 'flag-outline'} size={13} color={COLORS.TEXT_MUTED} />
+          <Text style={styles.msgActionText}>{onDelete ? 'Delete' : 'Report'}</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.BG },
+  headerReport: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 40, paddingHorizontal: 12,
+    borderRadius: 20, backgroundColor: COLORS.ERROR_LIGHT,
+  },
+  headerReportText: { fontSize: 13, fontWeight: '800', color: COLORS.ERROR },
+  msgAction: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6, paddingHorizontal: 4 },
+  msgActionText: { fontSize: 12, fontWeight: '700', color: COLORS.TEXT_MUTED },
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 12, paddingVertical: 12,

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, TouchableOpacity,
-  StatusBar, RefreshControl, ActivityIndicator, Dimensions,
+  StatusBar, RefreshControl, ActivityIndicator, Dimensions, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -12,7 +12,8 @@ import { useUsersStore, type DirectoryUser } from '@/store/users';
 import { MemberCard } from '@/components/MemberCard';
 import { MemberDetailSheet } from '@/components/MemberDetailSheet';
 import { canSendProposals } from '@/lib/roles';
-import { SafetySheet } from '@/components/SafetySheet';
+import { SafetySheet, ReportBlockLink } from '@/components/SafetySheet';
+import { useTokensStore } from '@/store/tokens';
 
 const CARD_W = Dimensions.get('window').width - 32;
 
@@ -58,6 +59,14 @@ export default function BrowseScreen() {
   }, [refreshFromServer]);
 
   const propose = (p: DirectoryUser) => {
+    const tokens = useTokensStore.getState();
+    if (!tokens.hasEntry('proposal') && tokens.hasTicket('proposal')) {
+      Alert.alert(
+        "Tonight's invitation is sent",
+        'You can send one invitation per evening. Come back tomorrow from 19:00 to send another.',
+      );
+      return;
+    }
     setPreviewing(null);
     router.push({ pathname: '/proposal/create', params: { recipientEmail: p.email } });
   };
@@ -118,26 +127,17 @@ export default function BrowseScreen() {
               onPress={() => setPreviewing(p)}
               footer={
                 <View style={{ gap: 8 }}>
-                  <View style={styles.viewRow}>
-                    <TouchableOpacity style={[styles.viewBtn, { flex: 1 }]} onPress={() => setPreviewing(p)} activeOpacity={0.8}>
-                      <Ionicons name="expand-outline" size={15} color={COLORS.TEXT_SECONDARY} />
-                      <Text style={styles.viewText}>View full profile</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.moreBtn}
-                      onPress={() => setSafetyFor(p)}
-                      activeOpacity={0.8}
-                      accessibilityLabel={`Report or block ${p.name}`}
-                    >
-                      <Ionicons name="ellipsis-horizontal" size={18} color={COLORS.TEXT_SECONDARY} />
-                    </TouchableOpacity>
-                  </View>
+                  <TouchableOpacity style={styles.viewBtn} onPress={() => setPreviewing(p)} activeOpacity={0.8}>
+                    <Ionicons name="expand-outline" size={15} color={COLORS.TEXT_SECONDARY} />
+                    <Text style={styles.viewText}>View full profile</Text>
+                  </TouchableOpacity>
                   {isSender && (
                     <TouchableOpacity style={styles.proposeBtn} onPress={() => propose(p)} activeOpacity={0.88}>
                       <Ionicons name="heart" size={17} color="#fff" />
                       <Text style={styles.proposeText}>Propose a date</Text>
                     </TouchableOpacity>
                   )}
+                  <ReportBlockLink name={p.name.split(' ')[0]} onPress={() => setSafetyFor(p)} />
                 </View>
               }
             />

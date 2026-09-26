@@ -7,7 +7,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
-import { fetchMyBlocks, unblock as unblockOnServer, SUPPORT_EMAIL, type BlockedMember } from '@/lib/safety-supabase';
+import {
+  fetchMyBlocks, unblock as unblockOnServer, SUPPORT_EMAIL, type BlockedMember,
+  fetchRecentContacts, contactTarget, type RecentContact,
+} from '@/lib/safety-supabase';
+import { SafetySheet } from '@/components/SafetySheet';
+import { useDatesStore } from '@/store/dates';
+import { useProposalsStore } from '@/store/proposals';
 import { useSettingsStore } from '@/store/settings';
 
 const SAFETY_TIPS = [
@@ -23,25 +29,28 @@ export default function SafetyScreen() {
   const { safety, hydrate: hydrateSettings, isHydrated: settingsHydrated } = useSettingsStore();
   const [blocked, setBlocked] = useState<BlockedMember[]>([]);
   const [loadingBlocks, setLoadingBlocks] = useState(true);
+  /** Everyone you could report: recent calls, dates and invitations. */
+  const [contacts, setContacts] = useState<RecentContact[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(true);
+  const [reporting, setReporting] = useState<RecentContact | null>(null);
 
   useEffect(() => { if (!settingsHydrated) hydrateSettings(); }, []);
   const contactCount = safety.emergencyContacts.length;
 
-  // Load the real blocked list from Supabase
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const list = await fetchMyBlocks();
-        if (active) setBlocked(list);
-      } catch {
-        // offline / not signed in — show empty
-      } finally {
-        if (active) setLoadingBlocks(false);
-      }
-    })();
-    return () => { active = false; };
-  }, []);
+  const loadLists = async () => {
+    const [b, c] = await Promise.allSettled([fetchMyBlocks(), fetchRecentContacts()]);
+    if (b.status === 'fulfilled') setBlocked(b.value);
+    if (c.status === 'fulfilled') setContacts(c.value);
+    setLoadingBlocks(false);
+    setLoadingContacts(false);
+  };
+
+  // Load the real blocked list, and who you could report, from Supabase
+  useEffect(() => { loadLists(); }, []);
+
+  const emailReport = () =>
+    Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Safety%20report`).catch(() =>
+      Alert.alert('No mail app', `You can email us at ${SUPPORT_EMAIL}`));
 
   // By the block's own id: a block made from a call never gave us theirs.
   const unblock = (blockId: string, name: string) => {
@@ -77,6 +86,65 @@ export default function SafetyScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
+        {/* Report someone: works with nothing else on screen */}
+        <View style={[styles.section, { marginTop: 4 }]}>
+          <Text style={styles.sectionTitle}>Report someone</Text>
+          <View style={styles.card}>
+            <Text style={styles.reportIntro}>
+              Report anyone you've had a call, a date or an invitation with. Reporting blocks them at once, and
+              a person on our team reviews every report within 24 hours and removes anyone who breaks our rules.
+            </Text>
+            {loadingContacts ? (
+              <View style={{ padding: 18, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={COLORS.BRAND} />
+              </View>
+            ) : contacts.length === 0 ? (
+              <Text style={styles.reportEmpty}>
+                No one yet. Anyone you meet through Aura will appear here. You can also report from their profile,
+                an invitation, a conversation, a date card or during a call.
+              </Text>
+            ) : (
+              contacts.map((c) => (
+                <View key={`${c.kind}:${c.id}`} style={[styles.contactRow, styles.rowBorderTop]}>
+                  <View style={[styles.rowIcon, { backgroundColor: COLORS.BG }]}>
+                    <Ionicons
+                      name={c.kind === 'call' ? 'call-outline' : c.kind === 'date' ? 'calendar-outline' : 'mail-outline'}
+                      size={17}
+                      color={COLORS.TEXT_SECONDARY}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowLabel}>{c.name}</Text>
+                    <Text style={styles.rowDesc}>{c.detail} · {new Date(c.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.reportBtn}
+                    onPress={() => setReporting(c)}
+                    accessibilityLabel={`Report or block ${c.name}`}
+                  >
+                    <Ionicons name="flag-outline" size={14} color={COLORS.ERROR} />
+                    <Text style={styles.reportBtnText}>Report</Text>
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+            <TouchableOpacity style={[styles.row, styles.rowBorderTop]} onPress={emailReport} activeOpacity={0.7}>
+              <View style={[styles.rowIcon, { backgroundColor: COLORS.ERROR_LIGHT }]}>
+                <Ionicons name="mail" size={17} color={COLORS.ERROR} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.rowLabel, { color: COLORS.ERROR }]}>Report something else</Text>
+                <Text style={styles.rowDesc}>{SUPPORT_EMAIL} · we reply within 24 hours</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={COLORS.BORDER} />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.filterNote}>
+            Names, bios, messages, photos and videos are screened automatically, and objectionable content is
+            refused before anyone sees it.
+          </Text>
+        </View>
+
         {/* SOS card */}
         <View style={styles.sosCard}>
           <View style={styles.sosIconWrap}>
@@ -166,33 +234,26 @@ export default function SafetyScreen() {
           )}
         </View>
 
-        {/* Report */}
-        <View style={styles.section}>
-          <View style={styles.card}>
-            <TouchableOpacity
-              style={styles.row}
-              activeOpacity={0.7}
-              onPress={() => Alert.alert(
-                'How to report someone',
-                'Tap ⋯ on their profile, your conversation or your date, or Report during a call. Reporting blocks them straight away, and our team reviews every report within 24 hours. Anyone who breaks our rules is removed from Aura.',
-                [
-                  { text: 'Email us instead', onPress: () => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Safety%20report`).catch(() => {}) },
-                  { text: 'Got it' },
-                ],
-              )}
-            >
-              <View style={[styles.rowIcon, { backgroundColor: COLORS.ERROR_LIGHT }]}>
-                <Ionicons name="flag" size={18} color={COLORS.ERROR} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.rowLabel, { color: COLORS.ERROR }]}>Report someone</Text>
-                <Text style={styles.rowDesc}>Harassment, inappropriate content or a safety concern. Reviewed within 24 hours.</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={COLORS.BORDER} />
-            </TouchableOpacity>
-          </View>
-        </View>
       </ScrollView>
+
+      <SafetySheet
+        target={reporting ? contactTarget(reporting) : null}
+        onClose={() => setReporting(null)}
+        onDone={() => {
+          // The server already hides them; drop them from the other tabs'
+          // cached lists too, so the Dates card or the inbox don't linger.
+          const c = reporting;
+          if (c?.kind === 'date') {
+            useDatesStore.setState((st: any) => ({ dates: st.dates.filter((d: any) => d.id !== c.id) }));
+          } else if (c?.kind === 'proposal') {
+            useProposalsStore.setState((st: any) => ({ proposals: st.proposals.filter((p: any) => p.id !== c.id) }));
+          }
+          useDatesStore.getState().refreshDates().catch(() => {});
+          useProposalsStore.getState().refreshProposals().catch(() => {});
+          setReporting(null);
+          loadLists();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -249,4 +310,14 @@ const styles = StyleSheet.create({
   unblockText: { fontSize: 12, fontWeight: '700', color: COLORS.TEXT_SECONDARY },
 
   emptyText: { fontSize: 14, color: COLORS.TEXT_MUTED },
+  reportIntro: { fontSize: 13, color: COLORS.TEXT_SECONDARY, lineHeight: 19, padding: 14, paddingBottom: 10 },
+  reportEmpty: { fontSize: 13, color: COLORS.TEXT_MUTED, lineHeight: 19, paddingHorizontal: 14, paddingBottom: 12 },
+  contactRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10 },
+  rowBorderTop: { borderTopWidth: 1, borderTopColor: COLORS.BORDER_LIGHT },
+  reportBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 36, paddingHorizontal: 12,
+    borderRadius: 18, backgroundColor: COLORS.ERROR_LIGHT,
+  },
+  reportBtnText: { fontSize: 13, fontWeight: '800', color: COLORS.ERROR },
+  filterNote: { fontSize: 12, color: COLORS.TEXT_MUTED, lineHeight: 17, paddingHorizontal: 24, marginTop: 8 },
 });

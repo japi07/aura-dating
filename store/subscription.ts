@@ -117,3 +117,13 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
 
 /** Convenience hook for gating premium features. */
 export const useIsGold = () => useSubscriptionStore((s) => s.isGold);
+
+/**
+ * Gold is offered only when the App Store actually has plans to sell. Until
+ * the subscriptions exist in RevenueCat, every way into the paywall is hidden
+ * rather than leading to a purchase that fails. Configuring them later turns
+ * Gold back on without a new build.
+ */
+export function useGoldOnSale(): boolean {
+  return useSubscriptionStore((st) => st.canPurchase && st.packages.length > 0);
+}

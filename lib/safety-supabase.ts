@@ -223,3 +223,51 @@ export async function resolveReport(reportId: string, action: 'ban' | 'dismiss',
   });
   if (error) throw error;
 }
+
+/* ─── reporting from Profile > Safety, with nothing on screen ─── */
+
+export interface RecentContact {
+  kind: 'call' | 'date' | 'proposal';
+  id: string;
+  /** First name only. A call never reveals more than that. */
+  name: string;
+  detail: string;
+  at: string;
+}
+
+/** Everyone you've dealt with lately, newest first, minus anyone already hidden. */
+export async function fetchRecentContacts(): Promise<RecentContact[]> {
+  if (!supabaseEnabled) return [];
+  const { data, error } = await getSupabase().rpc('my_recent_contacts');
+  if (error) throw error;
+  return ((data as any[]) ?? []).map((r) => ({
+    kind: r.kind, id: r.id, name: r.name, detail: r.detail, at: r.at,
+  }));
+}
+
+export function contactTarget(c: RecentContact): SafetyTarget {
+  if (c.kind === 'call') return { name: c.name, callId: c.id };
+  if (c.kind === 'date') return { name: c.name, dateId: c.id };
+  return { name: c.name, proposalId: c.id };
+}
+
+/* ─── removing what you posted ─── */
+
+export async function deleteMyMessage(messageId: string): Promise<void> {
+  const { error } = await getSupabase().from('proposal_messages').delete().eq('id', messageId);
+  if (error) throw error;
+}
+
+export async function withdrawProposal(proposalId: string): Promise<void> {
+  const { error } = await getSupabase().rpc('withdraw_proposal', { p_proposal: proposalId });
+  if (error) throw new Error(friendlyError(error));
+}
+
+/** A stable identity for a target, so a sheet resets only when the person changes. */
+export function targetKey(t: SafetyTarget | null): string {
+  if (!t) return '';
+  return t.callId ? `call:${t.callId}`
+    : t.dateId ? `date:${t.dateId}`
+    : t.proposalId ? `proposal:${t.proposalId}`
+    : t.userId ? `user:${t.userId}` : '';
+}

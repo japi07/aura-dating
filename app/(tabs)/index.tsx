@@ -155,7 +155,7 @@ export default function MeetScreen() {
               }
               statusTone={!callTransportAvailable || !w.open ? 'soon' : 'ready'}
               disabled={!callTransportAvailable}
-              onPress={() => choose('call', '/meet/call')}
+              onPress={() => router.push('/meet/call')}
             />
 
             {/* ── Mode B — Blind date ── */}
@@ -179,7 +179,7 @@ export default function MeetScreen() {
               statusTone={
                 blind?.status === 'waiting' ? 'active' : !w.open ? 'soon' : 'ready'
               }
-              onPress={() => choose('blind', '/meet/blind')}
+              onPress={() => router.push('/meet/blind')}
             />
 
             {/* ── Mode C — Curated proposal ── */}
@@ -207,7 +207,9 @@ export default function MeetScreen() {
                   : isSender && !w.open ? 'soon' : 'ready'
               }
               onPress={() =>
-                isSender ? choose('proposal', '/meet/browse') : router.push('/meet/proposals')
+                // Looking costs nothing and has no hours: the token is spent,
+                // and the window checked, only when an invitation is sent.
+                router.push(isSender ? '/meet/browse' : '/meet/proposals')
               }
             />
 
