@@ -99,7 +99,7 @@ public URLs (Apple + the in-app links need them).
 ## 6. App Store listing + TestFlight
 
 - 👤 In App Store Connect, fill in: app name, subtitle, description, keywords,
-  **age rating** questionnaire (17+ for dating), **privacy nutrition labels**,
+  **age rating** questionnaire (override to **18+**: required by Guideline 1.2), **privacy nutrition labels**,
   support URL, marketing URL
 - 🤖 Draft the description, subtitle, keywords, and "what to test" notes
 - 🤖 Capture App Store **screenshots** from the running app

@@ -124,7 +124,7 @@ Apple Sign-In requires more than just the package — you need to register it wi
   - [ ] Privacy Policy URL (host `legal/PRIVACY_POLICY.md` somewhere publicly accessible)
   - [ ] Support URL
   - [ ] Marketing URL (optional)
-  - [ ] Age rating questionnaire (you'll mark 17+ for dating)
+  - [ ] Age rating questionnaire (override to 18+: required by Guideline 1.2)
 - [ ] **Privacy Policy hosted at a real URL** — Apple will check it loads
 - [ ] **Terms of Service** hosted similarly
 - [ ] Real backend running with all endpoints functional

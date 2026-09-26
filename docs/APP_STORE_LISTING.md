@@ -77,7 +77,7 @@ a day, real video introductions, verified profiles, and built-in safety tools.
 |-------|-------|
 | **Primary category** | Social Networking (or Lifestyle) |
 | **Secondary category** | Lifestyle |
-| **Age rating** | **17+** (required — dating + unrestricted web/user content) |
+| **Age rating** | **18+** (Guideline 1.2 requires 18+ for anonymous/user-generated content; answer the questionnaire, then use "Override to Higher Age Rating" → 18+) |
 | **Privacy Policy URL** | https://japi07.github.io/aura-dating/legal/privacy.html |
 | **Support URL** | https://japi07.github.io/aura-dating/legal/ (or a support page) |
 | **Marketing URL** | (optional) |
@@ -85,7 +85,7 @@ a day, real video introductions, verified profiles, and built-in safety tools.
 
 ### Age rating questionnaire — expect to answer "Yes" to:
 - Unrestricted web access: No (the app has no open browser)
-- "Dating" / mature themes: Yes → results in 17+
+- "Dating" / mature themes: Yes → calculates 16+/17+; override to **18+**
 - Infrequent/mild sexual content or nudity: No (moderation blocks it)
 
 ---
