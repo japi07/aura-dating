@@ -293,6 +293,59 @@ begin
     (v_state->>'banned_at' is not null, 'the app is told the account is suspended', v_state::text);
 end $$;
 
+/* ─── 8. Report from anywhere, remove what you posted (0028) ─────────── */
+do $$
+declare
+  e uuid := pg_temp.id('E'); f uuid := pg_temp.id('F');
+  v_prop uuid; v_msg_e uuid; v_msg_f uuid; v_call uuid;
+  v_contacts jsonb; v_after jsonb; v_other_del int; v_own_del int;
+  v_withdraw_other text := 'allowed'; v_status text; v_f_sees int;
+begin
+  -- E sends F an invitation; they swap a message each; they had a call.
+  insert into public.proposals (sender_id, recipient_id, venue_name, date_type, starts_at, message, video_url, expires_at)
+  values (e, f, 'Venue', 'coffee', now() + interval '5 days', 'Coffee?', 'https://example.test/v.mp4', now() + interval '5 days')
+  returning id into v_prop;
+  insert into public.proposal_messages (proposal_id, sender_id, caption, video_url)
+  values (v_prop, e, 'hi', 'https://example.test/m.mp4') returning id into v_msg_e;
+  insert into public.proposal_messages (proposal_id, sender_id, caption, video_url)
+  values (v_prop, f, 'hello', 'https://example.test/m.mp4') returning id into v_msg_f;
+  insert into public.calls (user_a_id, user_b_id, status, started_at, ended_at)
+  values (e, f, 'ended', now() - interval '1 hour', now() - interval '50 minutes') returning id into v_call;
+
+  perform pg_temp.act_as(f);
+  v_contacts := public.my_recent_contacts();
+  -- F may not delete E's message, and may not withdraw E's invitation.
+  with d as (delete from public.proposal_messages where id = v_msg_e returning 1) select count(*) into v_other_del from d;
+  begin perform public.withdraw_proposal(v_prop); exception when others then v_withdraw_other := sqlerrm; end;
+  -- F deletes her own message.
+  with d as (delete from public.proposal_messages where id = v_msg_f returning 1) select count(*) into v_own_del from d;
+
+  -- E withdraws the invitation: F no longer sees it.
+  perform pg_temp.act_as(e);
+  perform public.withdraw_proposal(v_prop);
+  perform pg_temp.act_as_owner();
+  select status into v_status from public.proposals where id = v_prop;
+
+  -- F blocks E: E drops out of F's report list too.
+  perform pg_temp.act_as(f);
+  perform public.safety_block(p_user => e, p_reason => 'test');
+  v_after := public.my_recent_contacts();
+  perform pg_temp.act_as_owner();
+
+  insert into t (ok, check_name, detail) values
+    (jsonb_array_length(v_contacts) = 2
+       and exists (select 1 from jsonb_array_elements(v_contacts) c where c->>'kind' = 'call' and c->>'id' = v_call::text)
+       and exists (select 1 from jsonb_array_elements(v_contacts) c where c->>'kind' = 'proposal'),
+     'Report someone lists the call and the invitation', v_contacts::text),
+    (position(e::text in v_contacts::text) = 0,
+     'the report list never contains the other member''s id', 'checked'),
+    (v_other_del = 0, 'a member cannot delete someone else''s message', v_other_del || ''),
+    (v_own_del = 1, 'a member can delete their own message', v_own_del || ''),
+    (v_withdraw_other <> 'allowed', 'only the sender can withdraw an invitation', v_withdraw_other),
+    (v_status = 'cancelled', 'the sender can withdraw an unanswered invitation', v_status),
+    (jsonb_array_length(v_after) = 0, 'after blocking, that person is gone from the report list', v_after::text);
+end $$;
+
 select n, case when ok then 'PASS' else 'FAIL' end as result, check_name, detail from t order by n;
 
 rollback;
