@@ -352,11 +352,45 @@ export async function submitSupportTicket(args: { subject?: string; message: str
  * `delete-account` Edge Function which runs under the service role and
  * removes the auth user (cascading to all their rows). Apple requires
  * in-app account deletion for accounts created in-app.
+ *
+ * Throws AccountSessionError when there is no usable session: the caller
+ * should send the member to sign in again rather than pretend it worked.
+ * Any other failure carries the server's own message, not the generic
+ * "Edge Function returned a non-2xx status code".
  */
+export class AccountSessionError extends Error {
+  constructor() {
+    super('For your security, please sign in again and then delete your account.');
+    this.name = 'AccountSessionError';
+  }
+}
+
 export async function deleteMyAccount(): Promise<void> {
   const supabase = getSupabase();
-  const uid = await getSessionUserId();
-  if (!uid) throw new Error('You need to be signed in to delete your account');
-  const { error } = await supabase.functions.invoke('delete-account');
-  if (error) throw error;
+
+  // A phone that sat in the background for days holds an expired access
+  // token; refresh it now instead of sending it and getting a 401.
+  let session = (await supabase.auth.getSession()).data.session;
+  if (!session || (session.expires_at ?? 0) * 1000 < Date.now() + 60_000) {
+    const { data } = await supabase.auth.refreshSession();
+    session = data.session ?? null;
+  }
+  if (!session) throw new AccountSessionError();
+
+  const { error } = await supabase.functions.invoke('delete-account', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+  if (!error) return;
+
+  const res: Response | undefined = (error as any).context;
+  if (res?.status === 401) throw new AccountSessionError();
+  let message = '';
+  try {
+    const body = await res?.json();
+    message = body?.error || body?.message || '';
+  } catch {
+    /* not JSON — fall through */
+  }
+  throw new Error(message || error.message || 'Could not delete the account. Please try again.');
 }

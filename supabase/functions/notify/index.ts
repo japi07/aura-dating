@@ -10,6 +10,9 @@
 // someone who has just filed a report can trigger it, so it cannot be used to
 // spam the admins, and it carries no detail about who reported whom.
 //
+// And { event: 'date_message', dateId }: right after a member writes in the
+// pre-date chat, the other person gets the message as a push.
+//
 // Runs with the service role so it can read the *recipient's* push tokens,
 // which RLS otherwise hides from everyone but the owner. We still verify the
 // caller is actually a party to the proposal before sending anything.
@@ -36,10 +39,12 @@ Deno.serve(async (req: Request) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-    const { proposalId, event } = await req.json();
-    if (event !== 'report' && (!proposalId || !['new', 'accepted'].includes(event))) {
-      return json({ error: 'Bad request' }, 400);
-    }
+    const { proposalId, dateId, event } = await req.json();
+    const ok =
+      event === 'report'
+      || (event === 'date_message' && !!dateId)
+      || (!!proposalId && ['new', 'accepted'].includes(event));
+    if (!ok) return json({ error: 'Bad request' }, 400);
 
     // Who's calling?
     const authHeader = req.headers.get('Authorization') ?? '';
@@ -87,6 +92,62 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify(alerts),
       });
       return json({ sent: alerts.length, expo: await res.json() }, 200);
+    }
+
+    if (event === 'date_message') {
+      // Only right after the caller has written in this date's chat, so it
+      // can't be used to ping someone at will. The newest message is the one
+      // we announce, and its text has already passed the database's filter.
+      const since = new Date(Date.now() - 60 * 1000).toISOString();
+      const { data: msg } = await admin
+        .from('date_messages')
+        .select('body, date:dates!inner(id, mode, user_a_id, user_b_id)')
+        .eq('date_id', dateId)
+        .eq('sender_id', callerId)
+        .gte('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!msg) return json({ error: 'Forbidden' }, 403);
+      const date = (msg as any).date;
+      const targetId = date.user_a_id === callerId ? date.user_b_id : date.user_a_id;
+
+      // Blocked either way, or banned: say nothing.
+      const { count: blocked } = await admin
+        .from('blocks')
+        .select('id', { count: 'exact', head: true })
+        .or(`and(blocker_id.eq.${callerId},blocked_id.eq.${targetId}),and(blocker_id.eq.${targetId},blocked_id.eq.${callerId})`);
+      if (blocked) return json({ sent: 0, note: 'Blocked' }, 200);
+
+      // A blind date stays blind: no name, just "your date".
+      let from = 'Your date';
+      if (date.mode !== 'blind') {
+        const { data: p } = await admin.from('profiles').select('name').eq('id', callerId).maybeSingle();
+        from = (p?.name || '').split(' ')[0] || from;
+      }
+      const text: string = (msg as any).body ?? '';
+
+      const { data: chatTokens } = await admin
+        .from('push_tokens')
+        .select('expo_push_token')
+        .eq('user_id', targetId);
+      const pushes = (chatTokens ?? [])
+        .map((t: any) => t.expo_push_token)
+        .filter((t: string) => !!t)
+        .map((to: string) => ({
+          to,
+          sound: 'default',
+          title: from,
+          body: text.length > 120 ? text.slice(0, 117) + '…' : text,
+          data: { dateId, event },
+        }));
+      if (pushes.length === 0) return json({ sent: 0, note: 'No push tokens for target user' }, 200);
+      const res = await fetch(EXPO_PUSH_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(pushes),
+      });
+      return json({ sent: pushes.length, expo: await res.json() }, 200);
     }
 
     // Load the proposal with both parties' names (service role bypasses RLS)
