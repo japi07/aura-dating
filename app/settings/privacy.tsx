@@ -12,8 +12,8 @@ import { useSettingsStore } from '@/store/settings';
 import { useAuthStore } from '@/store/auth';
 import { useProposalsStore } from '@/store/proposals';
 import { useDatesStore } from '@/store/dates';
-import { deleteMyAccount, AccountSessionError } from '@/lib/profile-supabase';
-import { SUPPORT_EMAIL } from '@/lib/safety-supabase';
+import { deleteMyAccount } from '@/lib/profile-supabase';
+import { getSessionUserId } from '@/lib/proposals-supabase';
 import { useIsGold } from '@/store/subscription';
 
 const VISIBILITY_OPTIONS: { key: 'all' | 'verifiedOnly' | 'paused'; label: string; desc: string; icon: string }[] = [
@@ -73,29 +73,18 @@ export default function PrivacyScreen() {
           text: 'Delete account',
           style: 'destructive',
           onPress: async () => {
-            try {
-              // Server-side deletion via the delete-account Edge Function
-              await deleteMyAccount();
-            } catch (e: any) {
-              if (e instanceof AccountSessionError) {
-                // The account still exists. Say so, and send them to sign in
-                // again instead of logging out as if it had been deleted.
-                Alert.alert('Sign in again', e.message, [
-                  {
-                    text: 'Sign in',
-                    onPress: async () => {
-                      await logout();
-                      router.replace('/auth/login');
-                    },
-                  },
-                ]);
+            const signedIn = await getSessionUserId();
+            if (signedIn) {
+              try {
+                // Server-side deletion via the delete-account Edge Function
+                await deleteMyAccount();
+              } catch (e: any) {
+                Alert.alert(
+                  'Could not delete account',
+                  e?.message || 'Please try again, or contact support if this continues.',
+                );
                 return;
               }
-              Alert.alert(
-                'Could not delete account',
-                `${e?.message || 'Please try again.'}\n\nIf this continues, email ${SUPPORT_EMAIL} and we'll delete it for you.`,
-              );
-              return;
             }
             // Clear local session + cached state and return to login
             await logout();

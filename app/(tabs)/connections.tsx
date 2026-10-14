@@ -15,7 +15,6 @@ import { addDateToCalendar } from '@/lib/calendar';
 import { cancelReminders } from '@/lib/notifications';
 import { formatDate, formatTime, formatCountdown, paymentLabel } from '@/lib/format';
 import { SafetySheet, ReportBlockLink } from '@/components/SafetySheet';
-import { DateChatButton } from '@/components/DateChatButton';
 
 const TABS = ['Upcoming', 'Past'] as const;
 type Tab = typeof TABS[number];
@@ -295,9 +294,6 @@ export default function DatesScreen() {
                       </TouchableOpacity>
                     </View>
 
-                    {/* The pre-date chat: opens eight hours before */}
-                    {!planning && <DateChatButton date={d} />}
-
                     {/* Swap a few more videos / files before meeting */}
                     {!!d.proposalId && !d.proposalId.startsWith('prop_') && (
                       <TouchableOpacity
@@ -399,10 +395,6 @@ export default function DatesScreen() {
                     </Text>
                   </View>
                 ) : null}
-
-                {/* The chat stays open three hours after the start, which is
-                    after the card has moved here */}
-                {d.status !== 'cancelled' && <DateChatButton date={d} onlyWhenOpen />}
 
                 {/* Post-date follow-up — open for 24h after the date */}
                 {d.status === 'completed' && !d.interest && followUpOpen(d) && (

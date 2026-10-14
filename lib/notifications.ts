@@ -61,7 +61,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
   }
 }
 
-/** Schedule local reminders for a confirmed date: chat open (8h), 2h and 30m before */
+/** Schedule a local reminder for a confirmed date — fires 2h + 30m before */
 export async function scheduleDateReminders(args: {
   dateId: string;
   with: string;
@@ -72,8 +72,6 @@ export async function scheduleDateReminders(args: {
   const now = Date.now();
 
   const offsets: { mins: number; copy: string }[] = [
-    // The pre-date chat opens now (date_chat_window in migration 0030).
-    { mins: 8 * 60, copy: `Your chat with ${args.with} is open. Say hello before ${args.venue} 💬` },
     { mins: 120, copy: `Date with ${args.with} at ${args.venue} in 2 hours ✨` },
     { mins: 30, copy: `${args.with} in 30 min — ${args.venue}. You've got this 💕` },
   ];

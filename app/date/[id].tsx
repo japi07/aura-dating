@@ -12,7 +12,6 @@ import { SharedAvailability } from '@/components/SharedAvailability';
 import { DateRoadmap } from '@/components/DateRoadmap';
 import { useDatesStore } from '@/store/dates';
 import { SafetySheet } from '@/components/SafetySheet';
-import { DateChatButton } from '@/components/DateChatButton';
 import {
   fetchDatePlanState, submitDateAvailability, submitDateAvailabilityInstants,
   instantsToPlan, planToInstants, buildRoadmap,
@@ -247,12 +246,6 @@ export default function DateDetailScreen() {
                   <Text style={s.confirmedText}>{plan?.venueName ?? date?.venue?.name}</Text>
                 </View>
               )}
-            </View>
-          )}
-
-          {date && reportable && (
-            <View style={{ marginBottom: 16, marginTop: -6 }}>
-              <DateChatButton date={{ ...date, startsAt: plan?.startsAt ?? date.startsAt }} />
             </View>
           )}
 

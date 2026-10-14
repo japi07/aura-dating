@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getSupabase } from '@/lib/supabase';
 
 export interface User {
   id: string;
@@ -88,16 +87,6 @@ export const useAuthStore = create<AuthStore>((set) => ({
       await SecureStore.deleteItemAsync('userData');
     } catch (error) {
       console.error('Failed to delete auth data during logout:', error);
-    }
-
-    // And the Supabase session itself. Without this the old member's session
-    // stayed on the phone after "Log out" or "Delete account", and every
-    // server call kept going out as them. 'local' needs no network, so it
-    // also works for an account that was just deleted.
-    try {
-      await getSupabase().auth.signOut({ scope: 'local' });
-    } catch (error) {
-      console.error('Failed to clear the Supabase session during logout:', error);
     }
 
     // Also wipe per-user app state so the next person doesn't inherit
