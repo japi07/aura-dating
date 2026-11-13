@@ -1,0 +1,25 @@
+# Keeps the Supabase project from being paused for inactivity (free plan).
+# A paused project made App Review's sign-in fail in November 2026.
+# Calls public.keepalive() (migration 0029) once a day with the app's public key.
+#
+# Note: GitHub disables scheduled workflows in a repo with no commits for
+# 60 days. If that happens, re-enable it under Actions > Keep Supabase awake.
+name: Keep Supabase awake
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Call keepalive()
+        run: |
+          URL=$(jq -r '.expo.extra.supabaseUrl' app.json)
+          KEY=$(jq -r '.expo.extra.supabaseAnonKey' app.json)
+          curl -fsS -X POST "$URL/rest/v1/rpc/keepalive" \
+            -H "apikey: $KEY" \
+            -H "Content-Type: application/json" -d '{}'
