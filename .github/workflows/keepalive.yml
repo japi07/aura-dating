@@ -1,6 +1,10 @@
 # Keeps the Supabase project from being paused for inactivity (free plan).
 # A paused project made App Review's sign-in fail in November 2026.
-# Calls public.keepalive() (migration 0029) once a day with the app's public key.
+#
+# One small read a day (the first version) was not enough: Supabase still
+# warned the project would be paused. Now every six hours it writes a
+# heartbeat row (public.keepalive(), migration 0030) and touches the auth and
+# storage services the app uses.
 #
 # Note: GitHub disables scheduled workflows in a repo with no commits for
 # 60 days. If that happens, re-enable it under Actions > Keep Supabase awake.
@@ -8,7 +12,7 @@ name: Keep Supabase awake
 
 on:
   schedule:
-    - cron: '17 6 * * *'
+    - cron: '17 */6 * * *'
   workflow_dispatch:
 
 jobs:
@@ -16,10 +20,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Call keepalive()
+      - name: Database, auth and storage
         run: |
           URL=$(jq -r '.expo.extra.supabaseUrl' app.json)
           KEY=$(jq -r '.expo.extra.supabaseAnonKey' app.json)
+          echo "keepalive():"
           curl -fsS -X POST "$URL/rest/v1/rpc/keepalive" \
-            -H "apikey: $KEY" \
-            -H "Content-Type: application/json" -d '{}'
+            -H "apikey: $KEY" -H "Content-Type: application/json" -d '{}'
+          echo
+          echo "auth:"
+          curl -fsS -o /dev/null -w "%{http_code}\n" "$URL/auth/v1/health" -H "apikey: $KEY"
+          echo "storage:"
+          curl -fsS -o /dev/null -w "%{http_code}\n" \
+            "$URL/storage/v1/object/public/proposal-videos/192e869f-f3c1-4928-8db9-779fde2f5193/aura-demo-intro.mp4" -r 0-1023
